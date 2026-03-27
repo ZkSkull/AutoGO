@@ -1,0 +1,147 @@
+/* ── COMO FUNCIONA PAGE ── */
+.cf-section { background: var(--gray-100); }
+
+/* Numbers bar */
+.cf-numbers-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 3.5rem;
+}
+.cf-number-card {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px solid var(--gray-200);
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .4rem;
+}
+.cf-number-card i  { font-size: 1.4rem; color: var(--red); }
+.cf-number-val { font-family: var(--font-head); font-size: 2rem; font-weight: 900; color: var(--gray-900); line-height: 1; }
+.cf-number-lbl { font-size: .83rem; color: var(--gray-400); }
+
+/* Steps section */
+.steps-section { margin-bottom: 3.5rem; }
+.steps-section-header { margin-bottom: 1.8rem; }
+.steps-section-header h3 { font-family: var(--font-head); font-size: 1.7rem; font-weight: 900; color: var(--gray-900); display: flex; align-items: center; gap: .6rem; }
+.steps-section-header h3::before { content: ''; display: block; width: 4px; height: 24px; background: var(--red); border-radius: 2px; }
+.steps-section-header p  { color: var(--gray-400); margin-top: .3rem; font-size: .95rem; padding-left: 12px; }
+
+.cf-steps {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  background: #fff;
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  border: 1px solid var(--gray-200);
+  flex-wrap: wrap;
+}
+.cf-step {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: .5rem;
+}
+.cf-step-num {
+  font-family: var(--font-head);
+  font-size: 2.5rem;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: .5rem;
+  opacity: .25;
+}
+.cf-step-icon {
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem;
+  margin-bottom: .9rem;
+}
+.cf-step h4 { font-family: var(--font-head); font-size: 1.05rem; font-weight: 700; color: var(--gray-900); margin-bottom: .5rem; }
+.cf-step p  { font-size: .85rem; color: var(--gray-500); line-height: 1.55; }
+.cf-step-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray-300);
+  font-size: 1.1rem;
+  padding: 0 .3rem;
+  margin-top: 3.5rem;
+  flex-shrink: 0;
+}
+
+/* FAQ */
+.cf-faq { margin-bottom: 3rem; }
+.cf-faq h2 { font-family: var(--font-head); font-size: 1.8rem; font-weight: 900; color: var(--gray-900); margin-bottom: 1.5rem; text-transform: uppercase; }
+.faq-list { display: flex; flex-direction: column; gap: .6rem; }
+.faq-item {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--gray-200);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.faq-item:hover, .faq-item.open { border-color: var(--red); }
+.faq-question {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.1rem 1.3rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  font-size: .95rem;
+  gap: 1rem;
+}
+.faq-question i { color: var(--red); flex-shrink: 0; font-size: .85rem; }
+.faq-answer {
+  padding: 0 1.3rem 1.1rem;
+  font-size: .9rem;
+  color: var(--gray-500);
+  line-height: 1.65;
+  border-top: 1px solid var(--gray-100);
+  padding-top: .9rem;
+}
+
+/* CTA row */
+.cf-cta-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.cf-cta-card {
+  border-radius: var(--radius-lg);
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: .7rem;
+}
+.cf-cta-card i    { font-size: 2rem; }
+.cf-cta-card h3   { font-family: var(--font-head); font-size: 1.3rem; font-weight: 900; }
+.cf-cta-card p    { font-size: .88rem; opacity: .75; }
+.cf-cta-card.client   { background: var(--black); color: #fff; }
+.cf-cta-card.merchant { background: var(--red);   color: #fff; }
+.cf-cta-card.driver   { background: var(--gray-900); color: #fff; }
+.cf-cta-card .btn-primary { background: rgba(255,255,255,.15); border: 2px solid rgba(255,255,255,.3); width: 100%; justify-content: center; }
+.cf-cta-card .btn-primary:hover { background: rgba(255,255,255,.25); }
+
+@media(max-width: 900px) {
+  .cf-numbers-bar { grid-template-columns: repeat(2, 1fr); }
+  .cf-cta-row { grid-template-columns: 1fr; }
+}
+@media(max-width: 640px) {
+  .cf-steps { flex-direction: column; padding: 1.5rem; }
+  .cf-step-connector { transform: rotate(90deg); margin: 0 auto; }
+  .cf-numbers-bar { grid-template-columns: 1fr 1fr; }
+}

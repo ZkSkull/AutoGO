@@ -1,0 +1,245 @@
+/* ═══════════════════════════════════════
+   PRICE COMPARISON COMPONENT
+═══════════════════════════════════════ */
+
+.price-comp-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+/* Header */
+.price-comp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .8rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--gray-100);
+}
+.price-comp-product-info {
+  display: flex;
+  align-items: center;
+  gap: .9rem;
+}
+.price-comp-icon {
+  font-size: 2.2rem;
+  width: 52px; height: 52px;
+  background: var(--gray-100);
+  border-radius: var(--radius-lg);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.price-comp-product-name {
+  font-family: var(--font-head);
+  font-size: 1.1rem; font-weight: 700;
+  color: var(--gray-900);
+}
+.price-comp-product-meta {
+  font-size: .82rem; color: var(--gray-400);
+  margin-top: .15rem;
+}
+.price-comp-savings-badge {
+  display: flex; align-items: center; gap: .4rem;
+  background: rgba(34,197,94,.1);
+  color: #15803D;
+  border: 1px solid rgba(34,197,94,.25);
+  padding: .4rem .9rem;
+  border-radius: 100px;
+  font-size: .83rem; font-weight: 700;
+}
+
+/* Sort tabs */
+.price-comp-sort-tabs {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+.price-comp-tab {
+  display: flex; align-items: center; gap: .35rem;
+  padding: .38rem .85rem;
+  border: 2px solid var(--gray-200);
+  border-radius: 100px;
+  font-size: .82rem; font-weight: 600;
+  color: var(--gray-600);
+  background: #fff;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.price-comp-tab:hover  { border-color: var(--red); color: var(--red); }
+.price-comp-tab.active { background: var(--red); color: #fff; border-color: var(--red); }
+
+/* Price bar */
+.price-comp-bar-section {
+  background: var(--gray-100);
+  border-radius: var(--radius);
+  padding: .9rem 1rem;
+}
+.price-comp-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: .82rem;
+  margin-bottom: .6rem;
+}
+.price-comp-bar-labels span:first-child { font-weight: 700; color: var(--green); }
+.price-comp-bar-labels span:last-child  { font-weight: 700; color: var(--red); }
+.price-comp-bar-track {
+  height: 8px;
+  background: linear-gradient(to right, rgba(34,197,94,.3), rgba(225,26,44,.3));
+  border-radius: 4px;
+  position: relative;
+}
+.price-comp-bar-dot {
+  position: absolute;
+  top: 50%; transform: translate(-50%,-50%);
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  cursor: pointer;
+  transition: transform var(--transition);
+}
+.price-comp-bar-dot:hover { transform: translate(-50%,-50%) scale(1.3); }
+
+/* Store rows */
+.price-comp-list {
+  display: flex;
+  flex-direction: column;
+  gap: .7rem;
+}
+.price-comp-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #fff;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.2rem;
+  transition: all var(--transition);
+  flex-wrap: wrap;
+}
+.price-comp-row:hover { border-color: var(--gray-400); box-shadow: var(--shadow); }
+.price-comp-row.best  {
+  border-color: var(--green);
+  background: rgba(34,197,94,.03);
+  box-shadow: 0 2px 12px rgba(34,197,94,.15);
+}
+
+/* Rank */
+.price-comp-rank {
+  width: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Store info */
+.price-comp-store-info {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  flex: 1;
+  min-width: 160px;
+}
+.price-comp-store-avatar {
+  width: 40px; height: 40px;
+  background: var(--gray-800);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.price-comp-store-name {
+  font-family: var(--font-head);
+  font-size: .98rem; font-weight: 700;
+  color: var(--gray-900);
+  display: flex; align-items: center; gap: .5rem;
+  flex-wrap: wrap;
+}
+.price-comp-highlight-tag {
+  display: inline-flex; align-items: center; gap: .25rem;
+  font-size: .72rem; font-weight: 700;
+  padding: .15rem .5rem;
+  border-radius: 100px;
+  border: 1px solid;
+  font-family: var(--font-head);
+}
+.price-comp-store-meta {
+  display: flex; gap: .8rem; flex-wrap: wrap;
+  font-size: .8rem; color: var(--gray-400);
+  margin-top: .2rem;
+}
+.price-comp-store-meta span {
+  display: flex; align-items: center; gap: .25rem;
+}
+
+/* Delivery */
+.price-comp-delivery {
+  display: flex; align-items: center; gap: .4rem;
+  font-size: .85rem; color: var(--gray-600);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Price block */
+.price-comp-price-block {
+  text-align: right;
+  flex-shrink: 0;
+  min-width: 100px;
+}
+.price-comp-price {
+  font-family: var(--font-head);
+  font-size: 1.4rem; font-weight: 900;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: flex-end; gap: .2rem;
+}
+.price-comp-diff {
+  font-size: .75rem; color: var(--red);
+  margin-top: .15rem;
+}
+.price-comp-installment {
+  font-size: .75rem; color: var(--gray-400);
+  margin-top: .1rem;
+}
+
+/* Buy button */
+.price-comp-buy-btn {
+  flex-shrink: 0;
+  min-width: 110px;
+  justify-content: center;
+  font-size: .88rem;
+  padding: .58rem 1rem;
+}
+.price-comp-buy-btn:disabled {
+  opacity: .45; cursor: not-allowed;
+}
+
+/* Footer */
+.price-comp-footer {
+  display: flex; align-items: center; gap: .5rem;
+  font-size: .78rem; color: var(--gray-400);
+  padding-top: .8rem;
+  border-top: 1px solid var(--gray-100);
+}
+.price-comp-footer i { color: var(--gray-400); }
+
+/* Empty */
+.price-comp-empty {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 2.5rem;
+  color: var(--gray-400); gap: .8rem; text-align: center;
+}
+.price-comp-empty i { font-size: 2.5rem; opacity: .3; }
+
+/* Responsive */
+@media(max-width: 700px) {
+  .price-comp-row    { flex-wrap: wrap; }
+  .price-comp-store-info { min-width: 100%; }
+  .price-comp-price-block { flex: 1; text-align: left; }
+  .price-comp-buy-btn { width: 100%; }
+}
