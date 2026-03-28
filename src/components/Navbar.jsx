@@ -42,7 +42,7 @@ export default function Navbar({ transparent = false }) {
           {/* Logo */}
           <a className="logo" href="" onClick={e => { e.preventDefault(); navigate('/'); setMobileOpen(false); }}>
             <span className="logo-icon"><i className="fa-solid fa-gear" /></span>
-            <span>Peça<span className="logo-red">Rápida</span></span>
+            <span>Auto<span className="logo-red">GO</span></span>
           </a>
 
           {/* Desktop links */}

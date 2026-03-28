@@ -297,7 +297,7 @@ export default function Home() {
           <div>
             <a className="logo" href="/" onClick={e => { e.preventDefault(); navigate('/'); }}>
               <span className="logo-icon"><i className="fa-solid fa-gear" /></span>
-              <span>Peça<span className="logo-red">Rápida</span></span>
+              <span>Auto<span className="logo-red">GO</span></span>
             </a>
             <p style={{ color: 'rgba(255,255,255,.4)', marginTop: '.8rem', fontSize: '.88rem', maxWidth: 260 }}>
               O marketplace de autopeças mais rápido do Brasil.
@@ -321,7 +321,7 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <div className="footer-bottom">© 2025 PeçaRápida. Todos os direitos reservados.</div>
+        <div className="footer-bottom">© 2025 AutoGO. Todos os direitos reservados.</div>
       </footer>
 
       {/* ── CART FAB ── */}

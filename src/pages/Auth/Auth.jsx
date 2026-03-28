@@ -101,7 +101,7 @@ export default function Auth() {
         <div className="auth-left-inner">
           <a className="logo" href="/" onClick={e => { e.preventDefault(); navigate('/'); }}>
             <span className="logo-icon"><i className="fa-solid fa-gear" /></span>
-            <span>Peça<span className="logo-red">Rápida</span></span>
+            <span>Auto<span className="logo-red">GO</span></span>
           </a>
           <div className="auth-tagline">
             <h2>Autopeças<br />na velocidade<br />certa.</h2>

@@ -21,7 +21,7 @@ function LoadingScreen() {
       <div style={{ display:'flex', alignItems:'center', gap:'.6rem' }}>
         <i className="fa-solid fa-gear fa-spin" style={{ fontSize:'2rem', color:'var(--red)' }} />
         <span style={{ fontFamily:'var(--font-head)', fontSize:'2rem', fontWeight:900, color:'#fff' }}>
-          Peça<span style={{ color:'var(--red)' }}>Rápida</span>
+          Auto<span style={{ color:'var(--red)' }}>GO</span>
         </span>
       </div>
       <p style={{ color:'rgba(255,255,255,.4)', fontSize:'.9rem' }}>Carregando...</p>
