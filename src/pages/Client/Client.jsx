@@ -122,6 +122,42 @@ function ListProductCard({ product:p, onOpen, onAdd, onFav, isFav, showToast, on
           <i className={`fa-${isFav?'solid':'regular'} fa-heart`} />
         </button>
       </div>
+      {/* REVIEW MODAL */}
+      {reviewModal&&(
+        <Modal open title="Avaliar pedido" onClose={()=>setReviewModal(null)}>
+          <form onSubmit={submitReview}>
+            <p style={{color:'var(--gray-500)',marginBottom:'1rem',fontSize:'.9rem'}}>
+              Pedido <strong>{reviewModal.order_number}</strong> — {reviewModal.store?.name}
+            </p>
+            <div className="form-group">
+              <label>Sua nota</label>
+              <div style={{display:'flex',gap:'.5rem',margin:'.5rem 0'}}>
+                {[1,2,3,4,5].map(s=>(
+                  <button key={s} type="button"
+                    onClick={()=>setReviewForm(f=>({...f,rating:s}))}
+                    style={{fontSize:'1.8rem',background:'none',border:'none',cursor:'pointer',color:s<=reviewForm.rating?'#F5A623':'var(--gray-300)',transition:'color .15s'}}>
+                    ★
+                  </button>
+                ))}
+                <span style={{fontSize:'.9rem',color:'var(--gray-400)',alignSelf:'center',marginLeft:'.3rem'}}>{reviewForm.rating}/5</span>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Comentário (opcional)</label>
+              <textarea
+                rows={3}
+                placeholder="Como foi sua experiência?"
+                value={reviewForm.comment}
+                onChange={e=>setReviewForm(f=>({...f,comment:e.target.value}))}
+                style={{width:'100%',padding:'.7rem',border:'2px solid var(--gray-200)',borderRadius:'var(--radius)',fontSize:'.9rem',resize:'vertical'}}
+              />
+            </div>
+            <button type="submit" className="btn btn-primary btn-full" disabled={reviewSaving}>
+              {reviewSaving?<><i className="fa-solid fa-spinner fa-spin" /> Enviando…</>:<><i className="fa-solid fa-star" /> Enviar avaliação</>}
+            </button>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -161,6 +197,10 @@ export default function Client() {
   // Products from Supabase
   const [products,      setProducts]      = useState([]);
   const [prodLoading,   setProdLoading]   = useState(true);
+
+  const [reviewModal,   setReviewModal]   = useState(null); // order to review
+  const [reviewForm,    setReviewForm]    = useState({ rating:5, comment:'' });
+  const [reviewSaving,  setReviewSaving]  = useState(false);
 
   const realtimeChannel = useRef(null);
 
@@ -345,6 +385,32 @@ export default function Client() {
       loadOrders();
     } catch (err) {
       showToast('Erro ao criar pedido: ' + err.message, 'error');
+    }
+  };
+
+  // ── Avaliar pedido ──────────────────────────────────────
+  const submitReview = async (e) => {
+    e.preventDefault();
+    if (!reviewModal) return;
+    setReviewSaving(true);
+    try {
+      await supabase.from('reviews').insert({
+        order_id:   reviewModal.id,
+        store_id:   reviewModal.store_id,
+        user_id:    user.id,
+        rating:     reviewForm.rating,
+        comment:    reviewForm.comment,
+      });
+      // Mark order as reviewed
+      await supabase.from('orders').update({ reviewed: true }).eq('id', reviewModal.id);
+      setOrders(prev => prev.map(o => o.id === reviewModal.id ? { ...o, reviewed: true } : o));
+      setReviewModal(null);
+      setReviewForm({ rating:5, comment:'' });
+      showToast('Avaliação enviada! Obrigado.', 'success');
+    } catch (err) {
+      showToast('Erro ao enviar avaliação.', 'error');
+    } finally {
+      setReviewSaving(false);
     }
   };
 
@@ -585,6 +651,16 @@ export default function Client() {
                         </React.Fragment>
                       ))}
                     </div>
+                    {o.status==='delivered' && !o.reviewed && (
+                      <button className="btn btn-outline btn-sm" style={{marginTop:'1rem'}} onClick={()=>{setReviewModal(o);setReviewForm({rating:5,comment:''});}}>
+                        <i className="fa-solid fa-star" /> Avaliar pedido
+                      </button>
+                    )}
+                    {o.status==='delivered' && o.reviewed && (
+                      <div style={{marginTop:'1rem',fontSize:'.82rem',color:'var(--green)'}}>
+                        <i className="fa-solid fa-circle-check" /> Avaliação enviada
+                      </div>
+                    )}
                   </div>
                 );
               })}

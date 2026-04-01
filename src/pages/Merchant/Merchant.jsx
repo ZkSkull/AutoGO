@@ -6,6 +6,7 @@ import Modal from '../../components/Modal';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase.js';
 import { fmt, statusLabel } from '../../data';
+import ImageUpload from '../../components/ImageUpload';
 import './Merchant.css';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
