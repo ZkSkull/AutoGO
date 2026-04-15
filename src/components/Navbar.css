@@ -20,7 +20,35 @@
   gap: 1.5rem;
 }
 
-/* Links */
+/* =============================================
+   LOGO
+   ============================================= */
+.logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.logo-img {
+  height: 80px;
+  width: auto;
+  object-fit: contain;
+  transition: transform .2s ease, opacity .2s ease;
+}
+
+.logo:hover .logo-img {
+  transform: scale(1.05);
+  opacity: .9;
+}
+
+/* Efeito ao scroll (fica mais profissional) */
+.navbar.scrolled .logo-img {
+  height: 60px;
+}
+
+/* =============================================
+   LINKS
+   ============================================= */
 .navbar-links {
   display: flex;
   gap: .2rem;
@@ -57,7 +85,9 @@
   border-radius: 50%;
 }
 
-/* Actions */
+/* =============================================
+   ACTIONS
+   ============================================= */
 .navbar-actions {
   display: flex;
   align-items: center;
@@ -91,7 +121,9 @@
   border: 2px solid var(--black);
 }
 
-/* Burger */
+/* =============================================
+   BURGER
+   ============================================= */
 .navbar-burger {
   display: none;
   color: rgba(255,255,255,.8);
@@ -102,7 +134,9 @@
 }
 .navbar-burger:hover { color: #fff; }
 
-/* Mobile menu */
+/* =============================================
+   MOBILE MENU
+   ============================================= */
 .navbar-mobile-menu {
   display: flex;
   flex-direction: column;
@@ -125,13 +159,25 @@
   color: #fff;
 }
 .mobile-link.active { color: var(--red); font-weight: 700; }
-.mobile-actions { display: flex; flex-direction: column; gap: .6rem; margin-top: 1rem; border-top: 1px solid rgba(255,255,255,.08); padding-top: 1rem; }
 
-/* Spacer */
+.mobile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  margin-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,.08);
+  padding-top: 1rem;
+}
+
+/* =============================================
+   SPACER
+   ============================================= */
 .navbar-spacer { height: 64px; }
 .navbar-spacer.transparent { height: 0; }
 
-/* Responsive */
+/* =============================================
+   RESPONSIVE
+   ============================================= */
 @media(max-width: 900px) {
   .navbar-links { display: none; }
   .navbar-btn-sm { display: none; }

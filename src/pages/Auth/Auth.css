@@ -331,3 +331,88 @@
   .auth-left  { display:none; }
   .auth-right { width:100%; padding:2rem 1.25rem; }
 }
+
+/* ── HEADER AJUSTADO ── */
+.auth-left-inner {
+  max-width: 420px;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Agrupamento */
+.auth-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2.2rem;
+}
+
+/* ── LOGO ANIMADA ── */
+.auth-logo-img {
+  height: 120px;
+  width: auto;
+  object-fit: contain;
+
+  opacity: 0;
+  transform: translateY(-20px) scale(0.95);
+  animation: logoFadeIn 0.8s ease forwards;
+}
+
+/* ── TEXTO ANIMADO ── */
+.auth-title {
+  margin: 0;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: textFadeUp 0.8s ease forwards;
+  animation-delay: 0.3s;
+}
+
+.auth-sub {
+  margin-top: 1rem;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: textFadeUp 0.8s ease forwards;
+  animation-delay: 0.5s;
+}
+
+/* Features animadas em sequência */
+.auth-features .auth-feat {
+  opacity: 0;
+  transform: translateX(-20px);
+  animation: fadeLeft 0.6s ease forwards;
+}
+
+.auth-features .auth-feat:nth-child(1) { animation-delay: 0.7s; }
+.auth-features .auth-feat:nth-child(2) { animation-delay: 0.85s; }
+.auth-features .auth-feat:nth-child(3) { animation-delay: 1s; }
+
+/* ── KEYFRAMES ── */
+
+/* Logo entra suave com leve zoom */
+@keyframes logoFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Texto sobe suave */
+@keyframes textFadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Features vindo da esquerda */
+@keyframes fadeLeft {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

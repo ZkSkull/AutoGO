@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import './Navbar.css';
+import logo from "../assets/images/logo-auto-go-branco.png";
 
 const NAV_LINKS = [
   { label: 'Início',        path: '/'              },
@@ -16,11 +17,14 @@ export default function Navbar({ transparent = false }) {
   const navigate  = useNavigate();
   const location  = useLocation();
   const { cartTotal, user } = useApp();
-  const [scrolled, setScrolled]   = useState(!transparent);
+  const [scrolled, setScrolled] = useState(!transparent);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    if (!transparent) { setScrolled(true); return; }
+    if (!transparent) { 
+      setScrolled(true); 
+      return; 
+    }
     const fn = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', fn);
     return () => window.removeEventListener('scroll', fn);
@@ -29,7 +33,10 @@ export default function Navbar({ transparent = false }) {
   const isActive = (path) => location.pathname === path;
 
   const handleDashboard = () => {
-    if (!user) { navigate('/auth'); return; }
+    if (!user) { 
+      navigate('/auth'); 
+      return; 
+    }
     if (user.type === 'merchant') navigate('/merchant');
     else if (user.type === 'driver') navigate('/driver');
     else navigate('/client');
@@ -39,10 +46,18 @@ export default function Navbar({ transparent = false }) {
     <>
       <nav className={`navbar${scrolled ? ' scrolled' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
         <div className="container navbar-inner">
+
           {/* Logo */}
-          <a className="logo" href="" onClick={e => { e.preventDefault(); navigate('/'); setMobileOpen(false); }}>
-            <span className="logo-icon"><i className="fa-solid fa-gear" /></span>
-            <span>Auto<span className="logo-red">GO</span></span>
+          <a
+            className="logo"
+            href=""
+            onClick={e => {
+              e.preventDefault();
+              navigate('/');
+              setMobileOpen(false);
+            }}
+          >
+            <img src={logo} alt="AutoGO" className="logo-img" />
           </a>
 
           {/* Desktop links */}
@@ -74,8 +89,12 @@ export default function Navbar({ transparent = false }) {
               </button>
             ) : (
               <>
-                <button className="btn btn-outline navbar-btn-sm" onClick={() => navigate('/auth')}>Entrar</button>
-                <button className="btn btn-primary navbar-btn-sm" onClick={() => navigate('/auth?mode=register')}>Cadastrar</button>
+                <button className="btn btn-outline navbar-btn-sm" onClick={() => navigate('/auth')}>
+                  Entrar
+                </button>
+                <button className="btn btn-primary navbar-btn-sm" onClick={() => navigate('/auth?mode=register')}>
+                  Cadastrar
+                </button>
               </>
             )}
 
@@ -94,27 +113,55 @@ export default function Navbar({ transparent = false }) {
                 key={link.path}
                 href={link.path}
                 className={`mobile-link${isActive(link.path) ? ' active' : ''}`}
-                onClick={e => { e.preventDefault(); navigate(link.path); setMobileOpen(false); }}
+                onClick={e => {
+                  e.preventDefault();
+                  navigate(link.path);
+                  setMobileOpen(false);
+                }}
               >
                 {link.label}
               </a>
             ))}
+
             <div className="mobile-actions">
               {user ? (
-                <button className="btn btn-primary btn-full" onClick={() => { handleDashboard(); setMobileOpen(false); }}>
+                <button
+                  className="btn btn-primary btn-full"
+                  onClick={() => {
+                    handleDashboard();
+                    setMobileOpen(false);
+                  }}
+                >
                   <i className="fa-solid fa-grid-2" /> Ir para o Painel
                 </button>
               ) : (
                 <>
-                  <button className="btn btn-outline btn-full" onClick={() => { navigate('/auth'); setMobileOpen(false); }}>Entrar</button>
-                  <button className="btn btn-primary btn-full" onClick={() => { navigate('/auth?mode=register'); setMobileOpen(false); }}>Cadastrar</button>
+                  <button
+                    className="btn btn-outline btn-full"
+                    onClick={() => {
+                      navigate('/auth');
+                      setMobileOpen(false);
+                    }}
+                  >
+                    Entrar
+                  </button>
+                  <button
+                    className="btn btn-primary btn-full"
+                    onClick={() => {
+                      navigate('/auth?mode=register');
+                      setMobileOpen(false);
+                    }}
+                  >
+                    Cadastrar
+                  </button>
                 </>
               )}
             </div>
           </div>
         )}
       </nav>
-      {/* Spacer to avoid content hiding behind fixed nav */}
+
+      {/* Espaçamento */}
       <div className={`navbar-spacer${transparent ? ' transparent' : ''}`} />
     </>
   );

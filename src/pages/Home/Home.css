@@ -190,3 +190,22 @@
   .cta-split-card { padding: 2.5rem 1.5rem; }
   .brands-header { flex-direction: column; }
 }
+
+/* ── FOOTER LOGO ── */
+.footer-logo-img {
+  height: 100px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+  transition: transform .2s ease, opacity .2s ease;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+}
+
+.logo:hover .footer-logo-img {
+  transform: scale(1.05);
+  opacity: .9;
+}

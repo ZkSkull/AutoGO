@@ -1,10 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
+import logo from "../assets/images/logo-auto-go-branco.png";
 
 export default function Sidebar({ items, active, onNav, storeName, initials, role, sidebarOpen, setSidebarOpen }) {
   const { logout } = useApp();
-  const navigate   = useNavigate();
+  const navigate = useNavigate();
 
   const handleLogout = () => { logout(); navigate('/'); };
 
@@ -14,7 +15,7 @@ export default function Sidebar({ items, active, onNav, storeName, initials, rol
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
-          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.4)', zIndex:199, display:'none' }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 199, display: 'none' }}
           className="sidebar-mobile-overlay"
         />
       )}
@@ -22,11 +23,21 @@ export default function Sidebar({ items, active, onNav, storeName, initials, rol
       <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
         {/* Header */}
         <div className="sidebar-header">
-          <a className="logo" href="/" onClick={e => { e.preventDefault(); navigate('/'); }}>
-            <span className="logo-icon"><i className="fa-solid fa-gear" /></span>
-            <span>Auto<span className="logo-red">Go</span></span>
+          <a
+            className="logo"
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('/');
+            }}
+          >
+            <img src={logo} alt="AutoGO" className="sidebar-logo-img" />
           </a>
-          <button className="sidebar-close" onClick={() => setSidebarOpen(false)}>
+
+          <button
+            className="sidebar-close"
+            onClick={() => setSidebarOpen(false)}
+          >
             <i className="fa-solid fa-xmark" />
           </button>
         </div>
@@ -35,8 +46,8 @@ export default function Sidebar({ items, active, onNav, storeName, initials, rol
         <div className="sidebar-store">
           <div className={`store-avatar ${role === 'client' || role === 'driver' ? 'gray' : ''}`}>
             {role === 'merchant' ? <i className="fa-solid fa-store" /> :
-             role === 'driver'   ? <i className="fa-solid fa-motorcycle" /> :
-             <i className="fa-solid fa-user" />}
+              role === 'driver' ? <i className="fa-solid fa-motorcycle" /> :
+                <i className="fa-solid fa-user" />}
           </div>
           <div className="store-info">
             <strong>{storeName}</strong>

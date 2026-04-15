@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase.js';
 import './Auth.css';
+import logo from '../../assets/images/logo-auto-go-branco.png';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -13,47 +14,47 @@ export default function Auth() {
   const [mode, setMode] = useState(params.get('mode') === 'register' ? 'register' : 'login');
 
   // Cadastro: passo 1 = escolha de tipo, passo 2 = formulário
-  const [regStep,  setRegStep]  = useState(1);
+  const [regStep, setRegStep] = useState(1);
   const [userType, setUserType] = useState('');
 
-  const [showPw,  setShowPw]  = useState(false);
-  const [pwStr,   setPwStr]   = useState({ width: '0%', color: '#888', label: '' });
-  const [error,   setError]   = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [pwStr, setPwStr] = useState({ width: '0%', color: '#888', label: '' });
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Campos compartilhados (login e cadastro)
   const [email, setEmail] = useState('');
-  const [pw,    setPw]    = useState('');
+  const [pw, setPw] = useState('');
 
   // Campos de cadastro
-  const [name,        setName]        = useState('');
-  const [phone,       setPhone]       = useState('');
-  const [storeName,   setStoreName]   = useState('');
-  const [cnpj,        setCnpj]        = useState('');
-  const [addr,        setAddr]        = useState('');
-  const [cpf,         setCpf]         = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [storeName, setStoreName] = useState('');
+  const [cnpj, setCnpj] = useState('');
+  const [addr, setAddr] = useState('');
+  const [cpf, setCpf] = useState('');
   const [vehicleType, setVehicleType] = useState('moto');
-  const [regPw,       setRegPw]       = useState('');
-  const [confPw,      setConfPw]      = useState('');
-  const [agreed,      setAgreed]      = useState(false);
+  const [regPw, setRegPw] = useState('');
+  const [confPw, setConfPw] = useState('');
+  const [agreed, setAgreed] = useState(false);
 
   // Esqueci senha
-  const [forgotEmail,   setForgotEmail]   = useState('');
-  const [forgotSent,    setForgotSent]    = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSent, setForgotSent] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
-  const [forgotError,   setForgotError]   = useState('');
+  const [forgotError, setForgotError] = useState('');
 
   // ── Helpers ──────────────────────────────────────────────────
   const checkStrength = (val) => {
     let score = 0;
-    if (val.length >= 8)           score++;
-    if (/[A-Z]/.test(val))         score++;
-    if (/[0-9]/.test(val))         score++;
+    if (val.length >= 8) score++;
+    if (/[A-Z]/.test(val)) score++;
+    if (/[0-9]/.test(val)) score++;
     if (/[^A-Za-z0-9]/.test(val)) score++;
     const lvl = [
-      { width: '25%',  color: '#EF4444', label: 'Fraca'     },
-      { width: '50%',  color: '#F97316', label: 'Razoável'  },
-      { width: '75%',  color: '#EAB308', label: 'Boa'       },
+      { width: '25%', color: '#EF4444', label: 'Fraca' },
+      { width: '50%', color: '#F97316', label: 'Razoável' },
+      { width: '75%', color: '#EAB308', label: 'Boa' },
       { width: '100%', color: '#22C55E', label: 'Excelente' },
     ];
     setPwStr(lvl[score - 1] || { width: '0%', color: '#888', label: '' });
@@ -63,7 +64,7 @@ export default function Auth() {
   const maskPhone = (val) => {
     let v = val.replace(/\D/g, '').slice(0, 11);
     if (v.length <= 10) v = v.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
-    else                v = v.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+    else v = v.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
     setPhone(v);
   };
 
@@ -107,7 +108,7 @@ export default function Auth() {
     setError('');
     if (regPw !== confPw) { setError('As senhas não coincidem.'); return; }
     if (regPw.length < 8) { setError('Senha mínima de 8 caracteres.'); return; }
-    if (!agreed)          { setError('Aceite os termos para continuar.'); return; }
+    if (!agreed) { setError('Aceite os termos para continuar.'); return; }
     setLoading(true);
     try {
       await register({
@@ -145,9 +146,9 @@ export default function Auth() {
 
   // ── Cards de tipo de conta ────────────────────────────────────
   const TYPE_CARDS = [
-    { key: 'client',   icon: 'fa-user',       label: 'Cliente',      desc: 'Compre autopeças com entrega rápida'           },
-    { key: 'merchant', icon: 'fa-store',       label: 'Comerciante',  desc: 'Venda seus produtos para milhares de clientes' },
-    { key: 'driver',   icon: 'fa-motorcycle',  label: 'Entregador',   desc: 'Faça entregas e ganhe dinheiro'                },
+    { key: 'client', icon: 'fa-user', label: 'Cliente', desc: 'Compre autopeças com entrega rápida' },
+    { key: 'merchant', icon: 'fa-store', label: 'Comerciante', desc: 'Venda seus produtos para milhares de clientes' },
+    { key: 'driver', icon: 'fa-motorcycle', label: 'Entregador', desc: 'Faça entregas e ganhe dinheiro' },
   ];
 
   const activeCard = TYPE_CARDS.find(t => t.key === userType);
@@ -159,26 +160,42 @@ export default function Auth() {
       {/* ── LADO ESQUERDO ── */}
       <div className="auth-left">
         <div className="auth-left-inner">
-          <a className="logo" href="/" onClick={e => { e.preventDefault(); navigate('/'); }}>
-            <span className="logo-icon"><i className="fa-solid fa-gear" /></span>
-            <span>Auto<span className="logo-red">GO</span></span>
-          </a>
-          <div className="auth-tagline">
-            <h2>Autopeças<br />na velocidade<br />certa.</h2>
-            <p>+12.000 produtos, +340 lojas, entrega expressa.</p>
+
+          <div className="auth-header">
+            <img src={logo} alt="AutoGO" className="auth-logo-img" />
+
+            <div className="auth-tagline">
+              <h2 className="auth-title">
+                AUTOPEÇAS <br />
+                NA VELOCIDADE <br />
+                CERTA.
+              </h2>
+
+              <p className="auth-sub">
+                +12.000 produtos, +340 lojas, entrega expressa.
+              </p>
+            </div>
           </div>
+
           <div className="auth-features">
-            {[
-              ['fa-shield-halved', 'Compra 100% segura'],
-              ['fa-truck-fast',    'Entrega expressa'],
-              ['fa-rotate-left',   'Garantia na compra'],
-            ].map(([icon, label]) => (
-              <div key={icon} className="auth-feat">
-                <i className={`fa-solid ${icon}`} /> {label}
-              </div>
-            ))}
+            <div className="auth-feat">
+              <i className="fa-solid fa-shield-halved" />
+              Compra 100% segura
+            </div>
+            <div className="auth-feat">
+              <i className="fa-solid fa-truck-fast" />
+              Entrega expressa
+            </div>
+            <div className="auth-feat">
+              <i className="fa-solid fa-rotate-left" />
+              Garantia na compra
+            </div>
           </div>
-          <div className="auth-bg-glyph"><i className="fa-solid fa-gear" /></div>
+
+        </div>
+
+        <div className="auth-bg-glyph">
+          <i className="fa-solid fa-gear" />
         </div>
       </div>
 
