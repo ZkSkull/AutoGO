@@ -1,6 +1,34 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase.js';
 
+const MAX_DIM = 1280;   // lado maior máximo
+const JPEG_QUALITY = 0.82;
+
+/** Redimensiona e comprime a imagem para < MAX_DIM, retornando um Blob JPEG */
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+        if (scale >= 1 && file.type === 'image/jpeg') return resolve(file);
+
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Falha ao comprimir imagem')), 'image/jpeg', JPEG_QUALITY);
+      };
+      img.onerror = () => reject(new Error('Imagem inválida'));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function ImageUpload({ images = [], onChange, maxImages = 3 }) {
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
@@ -17,13 +45,13 @@ export default function ImageUpload({ images = [], onChange, maxImages = 3 }) {
     try {
       const urls = [];
       for (const file of files) {
-        const ext      = file.name.split('.').pop();
-        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const blob     = await compressImage(file);
+        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
         const path     = `products/${filename}`;
 
         const { error } = await supabase.storage
           .from('products')
-          .upload(path, file, { cacheControl: '3600', upsert: false });
+          .upload(path, blob, { cacheControl: '3600', upsert: false, contentType: 'image/jpeg' });
 
         if (error) throw error;
 
@@ -85,7 +113,7 @@ export default function ImageUpload({ images = [], onChange, maxImages = 3 }) {
       />
 
       <p style={{ fontSize:'.78rem', color:'var(--gray-400)', marginTop:'.5rem' }}>
-        Até {maxImages} fotos · JPG, PNG ou WebP · Máx. 5MB cada
+        Até {maxImages} fotos · JPG, PNG ou WebP · redimensionadas automaticamente
       </p>
     </div>
   );

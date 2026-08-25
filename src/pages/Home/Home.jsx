@@ -7,6 +7,13 @@ import { CATEGORIES, fmt } from '../../data';
 import './Home.css';
 import logo from '../../assets/images/logo-auto-go-branco.png';
 
+const QUERY_TIMEOUT = 8000;
+const withTimeout = (promise, ms) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo de conexão esgotado')), ms)),
+  ]);
+
 const BRAND_COLORS = {
   'Bosch': '#C8102E', 'NGK': '#E31837', 'TRW': '#003087', 'Monroe': '#F5A623',
   'Heliar': '#E31837', 'Gates': '#00AEEF', 'Mahle': '#007A33', 'Brembo': '#E31837',
@@ -23,6 +30,7 @@ export default function Home() {
   const [brands, setBrands] = useState([]);
   const [stats, setStats] = useState({ products: 0, stores: 0 });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -30,39 +38,46 @@ export default function Home() {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       // Produtos em destaque
-      const { data: prods } = await supabase
-        .from('products')
-        .select('*, store:stores(name)')
-        .eq('is_active', true)
-        .order('rating', { ascending: false })
-        .limit(8);
-      setProducts((prods || []).map(p => ({ ...p, icon: p.icon_emoji || '🔩' })));
+      const [{ data: prods, error: prodsErr }, { data: strs, error: strsErr }] = await withTimeout(Promise.all([
+        supabase
+          .from('products')
+          .select('*, store:stores(name)')
+          .eq('is_active', true)
+          .order('rating', { ascending: false })
+          .limit(8),
+        supabase
+          .from('stores')
+          .select('*')
+          .order('rating', { ascending: false })
+          .limit(4),
+      ]), QUERY_TIMEOUT);
+      if (prodsErr) throw prodsErr;
+      if (strsErr) throw strsErr;
 
-      // Lojas em destaque
-      const { data: strs } = await supabase
-        .from('stores')
-        .select('*')
-        .order('rating', { ascending: false })
-        .limit(4);
+      setProducts((prods || []).map(p => ({ ...p, icon: p.icon_emoji || '🔩' })));
       setStores(strs || []);
 
-      // Marcas únicas
-      const { data: brandData } = await supabase
+      // Marcas únicas (apenas o campo brand)
+      const { data: brandData, error: brandsErr } = await withTimeout(supabase
         .from('products')
         .select('brand')
-        .eq('is_active', true);
-      const uniqueBrands = [...new Set((brandData || []).map(p => p.brand))].slice(0, 12);
+        .eq('is_active', true), QUERY_TIMEOUT);
+      if (brandsErr) throw brandsErr;
+      const uniqueBrands = [...new Set((brandData || []).map(p => p.brand).filter(Boolean))].slice(0, 12);
       setBrands(uniqueBrands);
 
-      // Stats reais
-      setStats({
-        products: prods?.length ? (await supabase.from('products').select('id', { count: 'exact' }).eq('is_active', true)).count || 0 : 0,
-        stores: strs?.length ? (await supabase.from('stores').select('id', { count: 'exact' })).count || 0 : 0,
-      });
+      // Stats reais (head: true — retorna só a contagem, sem linhas)
+      const [{ count: prodCount }, { count: storeCount }] = await withTimeout(Promise.all([
+        supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true),
+        supabase.from('stores').select('id', { count: 'exact', head: true }),
+      ]), QUERY_TIMEOUT);
+      setStats({ products: prodCount || 0, stores: storeCount || 0 });
     } catch (err) {
       console.error(err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -82,8 +97,8 @@ export default function Home() {
         <div className="container hero-inner">
           <div className="hero-content">
             <div className="hero-badge"><i className="fa-solid fa-bolt" /> Entrega Expressa</div>
-            <h1 className="hero-title">Autopeças<br /><span className="accent">na sua porta.</span></h1>
-            <p className="hero-sub">Encontre peças originais e remanufaturadas das melhores lojas da sua cidade.</p>
+            <h1 className="hero-title">Encontre autopeças<br /><span className="accent">em minutos</span></h1>
+            <p className="hero-sub">Compare preços, escolha a loja e receba de forma rápida.</p>
             <div className="hero-search-row">
               <input
                 type="text"
@@ -92,8 +107,18 @@ export default function Home() {
                 onChange={e => setSearch(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && doSearch()}
               />
+
               <button className="btn btn-primary" onClick={doSearch}>
                 <i className="fa-solid fa-magnifying-glass" /> Buscar
+              </button>
+            </div>
+
+            <div className="hero-cta">
+              <button
+                className="btn btn-primary"
+                onClick={() => navigate('/client')}
+              >
+                Ver produtos agora
               </button>
             </div>
             <div className="hero-chips">
@@ -159,7 +184,13 @@ export default function Home() {
       <section className="section section-dark" id="produtos">
         <div className="container">
           <div className="section-header light"><h2>Produtos em Destaque</h2><p>Os mais buscados agora</p></div>
-          {loading ? (
+          {loadError ? (
+            <div style={{ textAlign: 'center', padding: '3rem 0' }}>
+              <i className="fa-solid fa-wifi" style={{ fontSize: '2rem', display: 'block', marginBottom: '1rem', color: 'rgba(255,255,255,.4)' }} />
+              <p style={{ color: 'rgba(255,255,255,.6)', marginBottom: '1.2rem' }}>Não foi possível conectar ao servidor.</p>
+              <button className="btn btn-primary" onClick={loadData}><i className="fa-solid fa-rotate-right" /> Tentar novamente</button>
+            </div>
+          ) : loading ? (
             <div className="products-grid">
               {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
                 <div key={i} style={{ height: 220, background: 'rgba(255,255,255,.05)', borderRadius: 'var(--radius-lg)', animation: 'pulse 1.5s infinite' }} />
@@ -209,7 +240,11 @@ export default function Home() {
       <section className="section" id="lojas">
         <div className="container">
           <div className="section-header"><h2>Lojas em Destaque</h2><p>Parceiros verificados perto de você</p></div>
-          {loading ? (
+          {loadError ? (
+            <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--gray-400)' }}>
+              <p>Falha ao carregar as lojas.</p>
+            </div>
+          ) : loading ? (
             <div className="stores-grid">
               {[1, 2, 3, 4].map(i => (
                 <div key={i} style={{ height: 160, background: 'var(--gray-100)', borderRadius: 'var(--radius-lg)', animation: 'pulse 1.5s infinite' }} />
@@ -267,7 +302,11 @@ export default function Home() {
               Ver todas as marcas <i className="fa-solid fa-arrow-right" />
             </button>
           </div>
-          {loading ? (
+          {loadError ? (
+            <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--gray-400)' }}>
+              <p>Falha ao carregar as marcas.</p>
+            </div>
+          ) : loading ? (
             <div className="brands-grid">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(i => (
                 <div key={i} className="brand-card">

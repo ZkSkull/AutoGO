@@ -20,7 +20,6 @@ export default function Categorias() {
   const navigate = useNavigate();
 
   const [categories,  setCategories]  = useState([]);
-  const [counts,      setCounts]      = useState({});
   const [loading,     setLoading]     = useState(true);
   const [selected,    setSelected]    = useState(null);
   const [catProducts, setCatProducts] = useState([]);
@@ -51,7 +50,6 @@ export default function Categorias() {
       (data || []).forEach(p => {
         countMap[p.category] = (countMap[p.category] || 0) + 1;
       });
-      setCounts(countMap);
 
       // Montar lista de categorias únicas
       const cats = Object.keys(CAT_DETAILS).map(name => ({
@@ -60,7 +58,7 @@ export default function Categorias() {
         count: countMap[name] || 0,
       }));
       setCategories(cats);
-    } catch (err) {
+    } catch {
       // Fallback com categorias padrão
       const cats = Object.keys(CAT_DETAILS).map(name => ({
         name, ...CAT_DETAILS[name], count: 0,

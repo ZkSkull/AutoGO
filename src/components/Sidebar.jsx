@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import logo from "../assets/images/logo-auto-go-branco.png";
 
-export default function Sidebar({ items, active, onNav, storeName, initials, role, sidebarOpen, setSidebarOpen }) {
+export default function Sidebar({ items, active, onNav, storeName, role, sidebarOpen, setSidebarOpen }) {
   const { logout } = useApp();
   const navigate = useNavigate();
 

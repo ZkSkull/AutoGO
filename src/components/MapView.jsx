@@ -111,7 +111,7 @@ export default function MapView({ mode = 'driver', origin, destination, driverPo
       if (routeRef.current) routeRef.current.remove();
       routeRef.current = L.polyline(coords, { color: '#E11A2C', weight: 5, opacity: 0.85 }).addTo(map);
       setRouteInfo({ distance: dist, duration: dur });
-    } catch (e) {
+    } catch {
       setError('Não foi possível calcular a rota.');
       if (from && to) {
         if (routeRef.current) routeRef.current.remove();

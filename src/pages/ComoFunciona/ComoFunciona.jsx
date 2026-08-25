@@ -33,7 +33,7 @@ const FAQS = [
   { q: 'Posso retirar a peça na loja?',                 a: 'Sim! Na hora de fechar o pedido escolha "Retirar na loja" e a peça ficará pronta em até 30 minutos.' },
 ];
 
-function StepsSection({ title, subtitle, steps, color }) {
+function StepsSection({ title, subtitle, steps }) {
   return (
     <div className="steps-section">
       <div className="steps-section-header">

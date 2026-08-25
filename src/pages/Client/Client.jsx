@@ -1,12 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Sidebar from '../../components/Sidebar';
 import Modal from '../../components/Modal';
-import ProductCard from '../../components/ProductCard';
 import PriceComparison from '../../components/PriceComparison';
 import { useApp } from '../../context/AppContext';
-import { supabase } from '../../lib/supabase.js';
+import { supabase } from '../../lib/supabase';
+import { profilesApi, addressesApi, vehiclesApi, ordersApi, reviewsApi } from '../../lib/api';
 import { fmt, statusLabel } from '../../data';
+import useSupabaseQuery from '../../lib/useSupabaseQuery';
+import ClientShop from './ClientShop';
+import ClientCart from './ClientCart';
+import ClientOrders from './ClientOrders';
+import ClientFavorites from './ClientFavorites';
+import ClientProfile from './ClientProfile';
 import './Client.css';
 
 const NAV = [
@@ -17,152 +23,6 @@ const NAV = [
   { page: 'profile',   label: 'Meu Perfil',   icon: 'fa-solid fa-circle-user'   },
 ];
 
-const CATS       = ['Tudo','Motor','Freios','Suspensão','Elétrica','Filtros','Transmissão','Arrefecimento'];
-const ALL_BRANDS = ['Bosch','TRW','Monroe','Heliar','Gates','NGK','Mahle','Brembo','Cofap','Modine','Magneti','Wega','Nakata','Dayco','Valeo'];
-const CONDITIONS = [{ val:'all',label:'Todos' },{ val:'new',label:'Novo' },{ val:'reman',label:'Remanufaturado' },{ val:'used',label:'Usado' }];
-const RATINGS    = [{ val:0,label:'Todas' },{ val:4.5,label:'4.5+ ★' },{ val:4,label:'4.0+ ★' },{ val:3,label:'3.0+ ★' }];
-const PRICE_RANGES = [
-  { val:'all',    label:'Todos os preços'  },
-  { val:'0-50',   label:'Até R$ 50'        },
-  { val:'50-150', label:'R$ 50 – R$ 150'   },
-  { val:'150-300',label:'R$ 150 – R$ 300'  },
-  { val:'300+',   label:'Acima de R$ 300'  },
-];
-
-function priceInRange(price, range) {
-  if (range === 'all')    return true;
-  if (range === '0-50')   return price <= 50;
-  if (range === '50-150') return price > 50  && price <= 150;
-  if (range === '150-300')return price > 150 && price <= 300;
-  if (range === '300+')   return price > 300;
-  return true;
-}
-
-// ── FILTER PANEL ─────────────────────────────────────────────────────────────
-function FilterPanel({ filters, onChange, onClear, productCount }) {
-  const [open, setOpen] = useState({ price:true, brands:true, condition:true, rating:true, stock:true });
-  const tog = k => setOpen(s => ({ ...s, [k]: !s[k] }));
-  const activeCount = [filters.priceRange!=='all'||filters.customMin||filters.customMax, filters.brands.length>0, filters.condition!=='all', filters.minRating>0, filters.onlyInStock].filter(Boolean).length;
-
-  return (
-    <aside className="filter-panel">
-      <div className="filter-panel-header">
-        <span className="filter-panel-title"><i className="fa-solid fa-sliders" /> Filtros {activeCount>0&&<span className="filter-active-count">{activeCount}</span>}</span>
-        {activeCount>0&&<button className="filter-clear-btn" onClick={onClear}>Limpar tudo</button>}
-      </div>
-      <p className="filter-result-count">{productCount} produto{productCount!==1?'s':''}</p>
-      {[
-        { key:'price', icon:'fa-tag', label:'Faixa de preço', content: (
-          <div className="filter-options">
-            {PRICE_RANGES.map(r=><label key={r.val} className={`filter-radio${filters.priceRange===r.val?' active':''}`}><input type="radio" name="price" checked={filters.priceRange===r.val} onChange={()=>onChange('priceRange',r.val)} />{r.label}</label>)}
-            <div className="filter-price-custom"><span>Personalizado:</span><div className="price-inputs"><input type="number" placeholder="Min" value={filters.customMin} onChange={e=>onChange('customMin',e.target.value)} /><span>—</span><input type="number" placeholder="Max" value={filters.customMax} onChange={e=>onChange('customMax',e.target.value)} /></div></div>
-          </div>
-        )},
-        { key:'brands', icon:'fa-certificate', label:'Marcas', content: (
-          <div className="filter-options">
-            {ALL_BRANDS.map(b=><label key={b} className={`filter-check${filters.brands.includes(b)?' active':''}`}><input type="checkbox" checked={filters.brands.includes(b)} onChange={()=>onChange('brands',filters.brands.includes(b)?filters.brands.filter(x=>x!==b):[...filters.brands,b])} /><span>{b}</span><span className="filter-check-count">{PRODUCTS.filter(p=>p.brand===b).length}</span></label>)}
-          </div>
-        )},
-        { key:'condition', icon:'fa-box-open', label:'Condição', content: (
-          <div className="filter-options">
-            {CONDITIONS.map(c=><label key={c.val} className={`filter-radio${filters.condition===c.val?' active':''}`}><input type="radio" name="condition" checked={filters.condition===c.val} onChange={()=>onChange('condition',c.val)} />{c.label}</label>)}
-          </div>
-        )},
-        { key:'rating', icon:'fa-star', label:'Avaliação', content: (
-          <div className="filter-options">
-            {RATINGS.map(r=><label key={r.val} className={`filter-radio${filters.minRating===r.val?' active':''}`}><input type="radio" name="rating" checked={filters.minRating===r.val} onChange={()=>onChange('minRating',r.val)} /><span style={{color:r.val>0?'#F5A623':'inherit'}}>{r.val>0?'★'.repeat(Math.floor(r.val)):''} {r.label}</span></label>)}
-          </div>
-        )},
-        { key:'stock', icon:'fa-warehouse', label:'Estoque', content: (
-          <div className="filter-options">
-            <label className={`filter-toggle${filters.onlyInStock?' active':''}`}><div className="toggle-switch" onClick={()=>onChange('onlyInStock',!filters.onlyInStock)}><div className={`toggle-knob${filters.onlyInStock?' on':''}`} /></div><span>Somente em estoque</span></label>
-          </div>
-        )},
-      ].map(({ key, icon, label, content }) => (
-        <div key={key} className="filter-section">
-          <button className="filter-section-header" onClick={()=>tog(key)}>
-            <span><i className={`fa-solid ${icon}`} /> {label}</span>
-            <i className={`fa-solid fa-chevron-${open[key]?'up':'down'}`} />
-          </button>
-          {open[key] && content}
-        </div>
-      ))}
-    </aside>
-  );
-}
-
-// ── LIST CARD ─────────────────────────────────────────────────────────────────
-function ListProductCard({ product:p, onOpen, onAdd, onFav, isFav, showToast, onCompare }) {
-  const hasCompare = false;
-  return (
-    <div className="list-product-card" onClick={()=>onOpen(p)}>
-      <div className="list-product-img">{p.icon}</div>
-      <div className="list-product-info">
-        <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.3rem'}}>
-          <span style={{fontSize:'.78rem',color:'var(--gray-400)',textTransform:'uppercase',letterSpacing:'.04em'}}>{p.brand}</span>
-          {p.badge&&<span className="product-badge-tag">{p.badge}</span>}
-        </div>
-        <div className="list-product-name">{p.name}</div>
-        <div style={{fontSize:'.83rem',color:'var(--gray-400)',margin:'.3rem 0'}}><i className="fa-solid fa-car" style={{color:'var(--red)',marginRight:'.3rem'}} />{p.compat}</div>
-        <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
-          <span style={{color:'#F5A623',fontSize:'.85rem'}}>{'★'.repeat(Math.floor(p.rating))}</span>
-          <span style={{fontSize:'.82rem',color:'var(--gray-400)'}}>{p.rating}</span>
-          <span style={{fontSize:'.78rem',color:p.stock>0?'var(--green)':'var(--red)',marginLeft:'.3rem'}}>
-            <i className={`fa-solid fa-${p.stock>0?'circle-check':'circle-xmark'}`} /> {p.stock>0?`${p.stock} em estoque`:'Sem estoque'}
-          </span>
-        </div>
-      </div>
-      <div className="list-product-right">
-        <div className="list-product-price">{fmt(p.price)}</div>
-        <div style={{fontSize:'.78rem',color:'var(--gray-400)',marginBottom:'.7rem'}}>12x {fmt(p.price/12)}</div>
-        <button className="btn btn-primary btn-sm" onClick={e=>{e.stopPropagation();onAdd(p);showToast(`${p.name} adicionado!`,'success');}}>
-          <i className="fa-solid fa-cart-plus" /> Comprar
-        </button>
-        <button className="btn-fav-list" onClick={e=>{e.stopPropagation();onFav(p.id);}}>
-          <i className={`fa-${isFav?'solid':'regular'} fa-heart`} />
-        </button>
-      </div>
-      {/* REVIEW MODAL */}
-      {reviewModal&&(
-        <Modal open title="Avaliar pedido" onClose={()=>setReviewModal(null)}>
-          <form onSubmit={submitReview}>
-            <p style={{color:'var(--gray-500)',marginBottom:'1rem',fontSize:'.9rem'}}>
-              Pedido <strong>{reviewModal.order_number}</strong> — {reviewModal.store?.name}
-            </p>
-            <div className="form-group">
-              <label>Sua nota</label>
-              <div style={{display:'flex',gap:'.5rem',margin:'.5rem 0'}}>
-                {[1,2,3,4,5].map(s=>(
-                  <button key={s} type="button"
-                    onClick={()=>setReviewForm(f=>({...f,rating:s}))}
-                    style={{fontSize:'1.8rem',background:'none',border:'none',cursor:'pointer',color:s<=reviewForm.rating?'#F5A623':'var(--gray-300)',transition:'color .15s'}}>
-                    ★
-                  </button>
-                ))}
-                <span style={{fontSize:'.9rem',color:'var(--gray-400)',alignSelf:'center',marginLeft:'.3rem'}}>{reviewForm.rating}/5</span>
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Comentário (opcional)</label>
-              <textarea
-                rows={3}
-                placeholder="Como foi sua experiência?"
-                value={reviewForm.comment}
-                onChange={e=>setReviewForm(f=>({...f,comment:e.target.value}))}
-                style={{width:'100%',padding:'.7rem',border:'2px solid var(--gray-200)',borderRadius:'var(--radius)',fontSize:'.9rem',resize:'vertical'}}
-              />
-            </div>
-            <button type="submit" className="btn btn-primary btn-full" disabled={reviewSaving}>
-              {reviewSaving?<><i className="fa-solid fa-spinner fa-spin" /> Enviando…</>:<><i className="fa-solid fa-star" /> Enviar avaliação</>}
-            </button>
-          </form>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── MAIN ─────────────────────────────────────────────────────────────────────
 export default function Client() {
   const { user, profile, cart, cartTotal, addToCart, removeFromCart, changeQty, clearCart, favorites, toggleFav, showToast } = useApp();
   const [params] = useSearchParams();
@@ -183,7 +43,6 @@ export default function Client() {
   const [discount,        setDiscount]        = useState(0);
   const [payMethod,       setPayMethod]       = useState('credit');
 
-  // Supabase state
   const [orders,          setOrders]          = useState([]);
   const [ordLoading,      setOrdLoading]      = useState(false);
   const [addresses,       setAddresses]       = useState([]);
@@ -192,84 +51,55 @@ export default function Client() {
   const [profileForm,     setProfileForm]     = useState({});
   const [profSaving,      setProfSaving]      = useState(false);
   const [newOrderId,      setNewOrderId]      = useState(null);
-  const [notifications,   setNotifications]   = useState([]);
-
-  // Products from Supabase
-  const [products,      setProducts]      = useState([]);
-  const [prodLoading,   setProdLoading]   = useState(true);
-
-  const [reviewModal,   setReviewModal]   = useState(null); // order to review
-  const [reviewForm,    setReviewForm]    = useState({ rating:5, comment:'' });
-  const [reviewSaving,  setReviewSaving]  = useState(false);
+  const [reviewModal,     setReviewModal]     = useState(null);
+  const [reviewForm,      setReviewForm]      = useState({ rating:5, comment:'' });
+  const [reviewSaving,    setReviewSaving]    = useState(false);
 
   const realtimeChannel = useRef(null);
 
+  const { data: products, loading: prodLoading } = useSupabaseQuery(
+    () => supabase
+      .from('products')
+      .select('*, store:stores(id, name, rating, is_open)')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) throw error;
+        return (data || []).map(p => ({
+          ...p, icon: p.icon_emoji || '🔩',
+          compat: p.compatibility || '', code: p.code || '',
+          badge: p.badge || '', storeId: p.store_id,
+        }));
+      }),
+    []
+  );
+
   useEffect(() => {
     if (params.get('cat'))    setCat(params.get('cat'));
+    if (params.get('page') === 'cart') setPage('cart');
     if (params.get('search')) setSearch(params.get('search'));
   }, [params]);
 
-  // Load products on mount (independent of user)
-  useEffect(() => {
-    loadProducts();
-  }, []);
-
   useEffect(() => {
     if (!user) return;
-    loadOrders();
-    loadAddresses();
-    loadVehicles();
-    loadNotifications();
+    loadUserData();
     subscribeOrderUpdates();
     return () => { if (realtimeChannel.current) supabase.removeChannel(realtimeChannel.current); };
   }, [user]);
 
-  // Preenche o formulário quando o profile carrega do banco
   useEffect(() => {
     if (!profile) return;
-    setProfileForm({
-      name:  profile.name  || '',
-      phone: profile.phone || '',
-      cpf:   profile.cpf   || '',
-    });
+    setProfileForm({ name: profile.name||'', phone: profile.phone||'', cpf: profile.cpf||'' });
   }, [profile]);
 
-  // ── Loaders ─────────────────────────────────────────────
-  const loadProducts = async () => {
-    setProdLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*, store:stores(id, name, rating, is_open)')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      // Normalize fields to match existing UI expectations
-      const normalized = (data || []).map(p => ({
-        ...p,
-        icon:   p.icon_emoji || '🔩',
-        compat: p.compatibility || '',
-        code:   p.code || '',
-        badge:  p.badge || '',
-        storeId: p.store_id,
-      }));
-      setProducts(normalized);
-    } catch (err) {
-      console.error('Erro ao carregar produtos:', err.message);
-    } finally {
-      setProdLoading(false);
-    }
+  const loadUserData = async () => {
+    loadOrders(); loadAddresses(); loadVehicles();
   };
 
   const loadOrders = async () => {
     setOrdLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`*, store:stores(name), items:order_items(product_name, quantity, product_price)`)
-        .eq('client_id', user.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const data = await ordersApi.getClientOrders(user.id);
       setOrders(data || []);
     } catch (err) { console.error(err); }
     finally { setOrdLoading(false); }
@@ -278,59 +108,32 @@ export default function Client() {
   const loadAddresses = async () => {
     setAddrLoading(true);
     try {
-      const { data } = await supabase.from('addresses').select('*').eq('user_id', user.id).order('is_default', { ascending: false });
-      setAddresses(data || []);
+      const data = await addressesApi.list(user.id);
+      setAddresses(data);
     } catch (err) { console.error(err); }
     finally { setAddrLoading(false); }
   };
 
   const loadVehicles = async () => {
     try {
-      const { data } = await supabase.from('vehicles').select('*').eq('user_id', user.id);
-      setVehicles(data || []);
+      const data = await vehiclesApi.list(user.id);
+      setVehicles(data);
     } catch (err) { console.error(err); }
   };
 
-  const loadNotifications = async () => {
-    try {
-      const { data } = await supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10);
-      setNotifications(data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  // ── Realtime — status dos pedidos ────────────────────────
   const subscribeOrderUpdates = () => {
     realtimeChannel.current = supabase
       .channel(`client_orders_${user.id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'orders',
-        filter: `client_id=eq.${user.id}`,
-      }, payload => {
-        setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o));
-        showToast(`Pedido atualizado: ${statusLabel(payload.new.status)}`, 'info');
-      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `client_id=eq.${user.id}` },
+        payload => { setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o)); showToast(`Pedido atualizado: ${statusLabel(payload.new.status)}`, 'info'); })
       .subscribe();
   };
 
-  // ── Filtros ──────────────────────────────────────────────
   const handleFilterChange = (key, value) => setFilters(f => ({ ...f, [key]: value }));
   const clearFilters = () => setFilters({ priceRange:'all', customMin:'', customMax:'', brands:[], condition:'all', minRating:0, onlyInStock:false });
 
-  const filtered = products
-    .filter(p => cat==='Tudo' || p.category===cat)
-    .filter(p => { if (!search) return true; const q=search.toLowerCase(); return p.name.toLowerCase().includes(q)||(p.brand||'').toLowerCase().includes(q)||(p.compat||'').toLowerCase().includes(q); })
-    .filter(p => { if (filters.customMin&&p.price<Number(filters.customMin)) return false; if (filters.customMax&&p.price>Number(filters.customMax)) return false; if (filters.customMin||filters.customMax) return true; return priceInRange(p.price,filters.priceRange); })
-    .filter(p => filters.brands.length===0||filters.brands.includes(p.brand))
-    .filter(p => filters.condition==='all'||p.condition===filters.condition)
-    .filter(p => (p.rating||5)>=filters.minRating)
-    .filter(p => !filters.onlyInStock||p.stock>0)
-    .sort((a,b) => sort==='price-asc'?a.price-b.price:sort==='price-desc'?b.price-a.price:sort==='rating'?(b.rating||5)-(a.rating||5):sort==='newest'?new Date(b.created_at)-new Date(a.created_at):0);
-
-  const activeFilterCount = [filters.priceRange!=='all'||filters.customMin||filters.customMax, filters.brands.length>0, filters.condition!=='all', filters.minRating>0, filters.onlyInStock].filter(Boolean).length;
-
-  // ── Cart ─────────────────────────────────────────────────
-  const cartItems = cart.map(i => ({ ...i, product: products.find(p => p.id===i.id) })).filter(i => i.product);
-  const subtotal  = cartItems.reduce((s,i) => s+i.product.price*i.qty, 0);
+  const cartItems = useMemo(() => cart.map(i => ({ ...i, product: products?.find(p => p.id===i.id) })).filter(i => i.product), [cart, products]);
+  const subtotal  = useMemo(() => cartItems.reduce((s,i) => s+i.product.price*i.qty, 0), [cartItems]);
   const freight   = delivery==='pickup'?0:delivery==='standard'&&subtotal>=100?0:delivery==='express'?8.90:5.90;
   const total     = subtotal+freight-discount;
 
@@ -339,138 +142,67 @@ export default function Client() {
     else showToast('Cupom inválido.','error');
   };
 
-  // ── Criar pedido no Supabase ─────────────────────────────
   const confirmOrder = async () => {
     if (!user) { showToast('Faça login para finalizar.','error'); return; }
-    try {
-      // Pega primeira loja dos itens (simplificado)
-      const storeId = cartItems[0]?.product?.storeId;
-      const defaultAddr = addresses.find(a => a.is_default) || addresses[0];
+    if (cartItems.length === 0) { showToast('Seu carrinho está vazio.','error'); return; }
 
-      const { data: order, error: orderErr } = await supabase
-        .from('orders')
-        .insert({
-          client_id:      user.id,
-          store_id:       storeId || null,
-          address_id:     defaultAddr?.id || null,
-          subtotal,
-          freight,
-          discount,
-          total,
-          delivery_type:  delivery,
-          payment_method: payMethod,
-          status:         'pending',
-        })
-        .select()
-        .single();
-
-      if (orderErr) throw orderErr;
-
-      // Inserir itens
-      const items = cartItems.map(i => ({
-        order_id:      order.id,
-        product_id:    i.product.id,
-        product_name:  i.product.name,
-        product_price: i.product.price,
-        quantity:      i.qty,
-        subtotal:      i.product.price * i.qty,
-      }));
-      await supabase.from('order_items').insert(items);
-
-      setNewOrderId(order.order_number);
-      clearCart();
-      setDiscount(0);
-      setCoupon('');
-      setCheckoutStep(3);
-      loadOrders();
-    } catch (err) {
-      showToast('Erro ao criar pedido: ' + err.message, 'error');
+    const storeIds = [...new Set(cartItems.map(i => i.product.storeId))];
+    if (storeIds.length > 1) {
+      showToast('Seu carrinho contém produtos de lojas diferentes. Faça um pedido por loja.','error');
+      return;
     }
+    const storeId = storeIds[0] || null;
+
+    try {
+      const defaultAddr = addresses.find(a => a.is_default) || addresses[0];
+      const items = cartItems.map(i => ({
+        product_id: i.product.id, product_name: i.product.name,
+        product_price: i.product.price, quantity: i.qty, subtotal: i.product.price * i.qty,
+      }));
+      const order = await ordersApi.create({
+        clientId: user.id, storeId, addressId: defaultAddr?.id||null,
+        subtotal, freight, discount, total, deliveryType: delivery, paymentMethod: payMethod, items,
+      });
+      setNewOrderId(order.order_number);
+      clearCart(); setDiscount(0); setCoupon(''); setCheckoutStep(3);
+      loadOrders();
+    } catch (err) { showToast('Erro ao criar pedido: ' + err.message, 'error'); }
   };
 
-  // ── Avaliar pedido ──────────────────────────────────────
   const submitReview = async (e) => {
     e.preventDefault();
     if (!reviewModal) return;
     setReviewSaving(true);
     try {
-      await supabase.from('reviews').insert({
-        order_id:   reviewModal.id,
-        store_id:   reviewModal.store_id,
-        user_id:    user.id,
-        rating:     reviewForm.rating,
-        comment:    reviewForm.comment,
-      });
-      // Mark order as reviewed
+      await reviewsApi.create({ orderId: reviewModal.id, storeId: reviewModal.store_id, userId: user.id, rating: reviewForm.rating, comment: reviewForm.comment });
       await supabase.from('orders').update({ reviewed: true }).eq('id', reviewModal.id);
       setOrders(prev => prev.map(o => o.id === reviewModal.id ? { ...o, reviewed: true } : o));
-      setReviewModal(null);
-      setReviewForm({ rating:5, comment:'' });
+      setReviewModal(null); setReviewForm({ rating:5, comment:'' });
       showToast('Avaliação enviada! Obrigado.', 'success');
-    } catch (err) {
-      showToast('Erro ao enviar avaliação.', 'error');
-    } finally {
-      setReviewSaving(false);
-    }
+    } catch { showToast('Erro ao enviar avaliação.', 'error'); }
+    finally { setReviewSaving(false); }
   };
 
-  // ── Perfil ───────────────────────────────────────────────
   const saveProfile = async (e) => {
-    e.preventDefault();
-    setProfSaving(true);
+    e.preventDefault(); setProfSaving(true);
     try {
-      const { error } = await supabase.from('profiles').update(profileForm).eq('id', user.id);
-      if (error) throw error;
+      await profilesApi.update(user.id, profileForm);
       showToast('Perfil atualizado!', 'success');
     } catch (err) { showToast('Erro ao salvar: '+err.message, 'error'); }
     finally { setProfSaving(false); }
   };
 
-  // ── Endereços ────────────────────────────────────────────
-  const addAddress = async () => {
-    const street = prompt('Endereço completo:');
-    if (!street) return;
-    const city   = prompt('Cidade:') || 'São Paulo';
-    const state  = prompt('Estado (UF):') || 'SP';
-    try {
-      const { data, error } = await supabase.from('addresses').insert({ user_id:user.id, street, city, state, is_default: addresses.length===0 }).select().single();
-      if (error) throw error;
-      setAddresses(prev => [...prev, data]);
-      showToast('Endereço adicionado!', 'success');
-    } catch (err) { showToast('Erro: '+err.message, 'error'); }
-  };
-
   const removeAddress = async (id) => {
-    try {
-      await supabase.from('addresses').delete().eq('id', id);
-      setAddresses(prev => prev.filter(a => a.id !== id));
-      showToast('Endereço removido.', 'info');
-    } catch (err) { showToast('Erro: '+err.message, 'error'); }
-  };
-
-  // ── Veículos ─────────────────────────────────────────────
-  const addVehicle = async () => {
-    const brand = prompt('Marca do veículo:');
-    if (!brand) return;
-    const model = prompt('Modelo:');
-    if (!model) return;
-    const year  = prompt('Ano:');
-    try {
-      const { data, error } = await supabase.from('vehicles').insert({ user_id:user.id, brand, model, year:parseInt(year)||null }).select().single();
-      if (error) throw error;
-      setVehicles(prev => [...prev, data]);
-      showToast('Veículo adicionado!', 'success');
-    } catch (err) { showToast('Erro: '+err.message, 'error'); }
+    try { await addressesApi.remove(id); setAddresses(prev => prev.filter(a => a.id !== id)); showToast('Endereço removido.', 'info'); }
+    catch (err) { showToast('Erro: '+err.message, 'error'); }
   };
 
   const clientName = profile?.name || user?.email?.split('@')[0] || 'Você';
   const navItems   = NAV.map(n => n.page==='cart' ? { ...n, badge: cartTotal } : n);
-  const unreadNotif = notifications.filter(n => !n.is_read).length;
 
   return (
     <div className="dash-bg dash-layout">
       <Sidebar items={navItems} active={page} onNav={setPage} storeName={clientName} role="client" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-
       <main className="dash-main">
         <header className="topbar">
           <button className="topbar-burger" onClick={()=>setSidebarOpen(v=>!v)}><i className="fa-solid fa-bars" /></button>
@@ -480,259 +212,56 @@ export default function Client() {
             {search&&<button style={{background:'none',border:'none',cursor:'pointer',color:'var(--gray-400)'}} onClick={()=>setSearch('')}><i className="fa-solid fa-xmark" /></button>}
           </div>
           <div className="topbar-actions">
-            <button className="topbar-btn" style={{position:'relative'}} onClick={()=>setPage('orders')}>
-              <i className="fa-solid fa-bell" />
-              {unreadNotif>0&&<span className="notif-dot" />}
-            </button>
-            <button className="topbar-btn" onClick={()=>setPage('cart')}>
-              <i className="fa-solid fa-cart-shopping" />
-              {cartTotal>0&&<span className="notif-dot" />}
-            </button>
+            <button className="topbar-btn" onClick={()=>setPage('cart')}><i className="fa-solid fa-cart-shopping" />{cartTotal>0&&<span className="notif-dot" />}</button>
             <div className="topbar-avatar" onClick={()=>setPage('profile')}>{clientName.slice(0,2).toUpperCase()}</div>
           </div>
         </header>
-
         <div className="page-content fade-in">
-
-          {/* ══ SHOP ═════════════════════════════════════════ */}
-          {page==='shop'&&(
-            <div>
-              <div className="cat-strip">
-                {CATS.map(c=><button key={c} className={`cat-pill${cat===c?' active':''}`} onClick={()=>setCat(c)}>{c}</button>)}
-              </div>
-              <div className="shop-toolbar">
-                <div className="shop-toolbar-left">
-                  <button className={`filter-toggle-btn${activeFilterCount>0?' has-filters':''}`} onClick={()=>setFilterPanelOpen(v=>!v)}>
-                    <i className="fa-solid fa-sliders" /> Filtros
-                    {activeFilterCount>0&&<span className="toolbar-filter-count">{activeFilterCount}</span>}
-                  </button>
-                  <span className="result-count">{filtered.length} produto{filtered.length!==1?'s':''}</span>
-                  {activeFilterCount>0&&(
-                    <div className="active-filter-tags">
-                      {filters.priceRange!=='all'&&<span className="filter-tag">{PRICE_RANGES.find(r=>r.val===filters.priceRange)?.label}<button onClick={()=>handleFilterChange('priceRange','all')}><i className="fa-solid fa-xmark" /></button></span>}
-                      {filters.brands.map(b=><span key={b} className="filter-tag">{b}<button onClick={()=>handleFilterChange('brands',filters.brands.filter(x=>x!==b))}><i className="fa-solid fa-xmark" /></button></span>)}
-                      {filters.condition!=='all'&&<span className="filter-tag">{CONDITIONS.find(c=>c.val===filters.condition)?.label}<button onClick={()=>handleFilterChange('condition','all')}><i className="fa-solid fa-xmark" /></button></span>}
-                      {filters.minRating>0&&<span className="filter-tag">{filters.minRating}+ ★<button onClick={()=>handleFilterChange('minRating',0)}><i className="fa-solid fa-xmark" /></button></span>}
-                      {filters.onlyInStock&&<span className="filter-tag">Em estoque<button onClick={()=>handleFilterChange('onlyInStock',false)}><i className="fa-solid fa-xmark" /></button></span>}
-                      <button className="clear-all-tags" onClick={clearFilters}>Limpar tudo</button>
-                    </div>
-                  )}
-                </div>
-                <div className="shop-toolbar-right">
-                  <select value={sort} onChange={e=>setSort(e.target.value)} className="sort-select">
-                    <option value="relevance">Mais relevantes</option>
-                    <option value="price-asc">Menor preço</option>
-                    <option value="price-desc">Maior preço</option>
-                    <option value="rating">Melhor avaliação</option>
-                    <option value="newest">Mais recentes</option>
-                  </select>
-                  <div className="view-toggle">
-                    <button className={viewMode==='grid'?'active':''} onClick={()=>setViewMode('grid')}><i className="fa-solid fa-grip" /></button>
-                    <button className={viewMode==='list'?'active':''} onClick={()=>setViewMode('list')}><i className="fa-solid fa-list" /></button>
-                  </div>
-                </div>
-              </div>
-              <div className={`shop-layout${filterPanelOpen?' filters-open':''}`}>
-                {filterPanelOpen&&<FilterPanel filters={filters} onChange={handleFilterChange} onClear={clearFilters} productCount={filtered.length} />}
-                <div className="shop-products">
-                  {prodLoading?(
-                    <div style={{textAlign:'center',padding:'3rem',gridColumn:'1/-1'}}>
-                      <i className="fa-solid fa-spinner fa-spin" style={{fontSize:'2rem',color:'var(--red)'}} />
-                      <p style={{color:'var(--gray-400)',marginTop:'1rem'}}>Carregando produtos...</p>
-                    </div>
-                  ):filtered.length>0?(
-                    <div className={viewMode==='list'?'products-list-view':'products-grid'}>
-                      {filtered.map(p=>viewMode==='list'
-                        ?<ListProductCard key={p.id} product={p} onOpen={setProductModal} onAdd={addToCart} onFav={toggleFav} isFav={favorites.includes(p.id)} showToast={showToast} onCompare={setCompareProduct} />
-                        :<ProductCard key={p.id} product={p} theme="light" onOpen={setProductModal} onCompare={setCompareProduct} />
-                      )}
-                    </div>
-                  ):(
-                    <div className="empty-state"><i className="fa-solid fa-magnifying-glass" /><p>Nenhum produto encontrado.</p><button className="btn btn-outline" onClick={clearFilters} style={{marginTop:'.5rem'}}>Limpar filtros</button></div>
-                  )}
-                </div>
-              </div>
-            </div>
+          {page==='shop' && (
+            <ClientShop
+              products={products||[]} prodLoading={prodLoading}
+              filters={filters} onFilterChange={handleFilterChange} onClearFilters={clearFilters}
+              sort={sort} onSortChange={setSort}
+              viewMode={viewMode} onViewModeChange={setViewMode}
+              cat={cat} onCatChange={setCat}
+              search={search} onSearchChange={setSearch}
+              onOpenProduct={setProductModal} onCompare={setCompareProduct}
+              filterPanelOpen={filterPanelOpen} onToggleFilterPanel={() => setFilterPanelOpen(v => !v)}
+              onAdd={addToCart} onFav={toggleFav} favorites={favorites} showToast={showToast}
+            />
           )}
-
-          {/* ══ CART ════════════════════════════════════════ */}
-          {page==='cart'&&(
-            <div>
-              <h2 style={{fontFamily:'var(--font-head)',fontSize:'1.8rem',fontWeight:900,marginBottom:'1.5rem'}}>Carrinho</h2>
-              <div className="cart-layout">
-                <div className="cart-items-list">
-                  {cartItems.length===0
-                    ?<div className="empty-state"><i className="fa-solid fa-cart-shopping" /><p>Seu carrinho está vazio.</p><button className="btn btn-primary" onClick={()=>setPage('shop')} style={{marginTop:'.5rem'}}>Ir para a loja</button></div>
-                    :cartItems.map(i=>(
-                      <div key={i.id} className="cart-item-card">
-                        <div className="cart-item-img">{i.product.icon}</div>
-                        <div className="cart-item-info">
-                          <div className="cart-item-name">{i.product.name}</div>
-                          <div style={{fontSize:'.82rem',color:'var(--gray-400)'}}>{i.product.brand} · {i.product.category}</div>
-                          <div className="cart-item-price">{fmt(i.product.price*i.qty)}</div>
-                          <div style={{fontSize:'.78rem',color:'var(--gray-400)',marginTop:'.2rem'}}>{fmt(i.product.price)} por unidade</div>
-                        </div>
-                        <div className="qty-row">
-                          <button className="qty-btn" onClick={()=>changeQty(i.id,-1)}><i className="fa-solid fa-minus" style={{fontSize:'.7rem'}} /></button>
-                          <span className="qty-val">{i.qty}</span>
-                          <button className="qty-btn" onClick={()=>changeQty(i.id,1)}><i className="fa-solid fa-plus" style={{fontSize:'.7rem'}} /></button>
-                        </div>
-                        <button className="cart-remove" onClick={()=>removeFromCart(i.id)}><i className="fa-solid fa-xmark" /></button>
-                      </div>
-                    ))
-                  }
-                </div>
-                <div className="cart-summary">
-                  <div className="dash-card">
-                    <h3 style={{fontFamily:'var(--font-head)',fontSize:'1.1rem',fontWeight:700,marginBottom:'1rem'}}>Resumo</h3>
-                    <div className="summary-line"><span>Subtotal ({cartItems.reduce((s,i)=>s+i.qty,0)} itens)</span><span>{fmt(subtotal)}</span></div>
-                    <div className="summary-line"><span>Frete</span><span>{freight===0?<span style={{color:'var(--green)'}}>Grátis</span>:fmt(freight)}</span></div>
-                    {discount>0&&<div className="summary-line" style={{color:'var(--green)'}}><span>Desconto</span><span>-{fmt(discount)}</span></div>}
-                    <div className="summary-line total"><span>Total</span><span>{fmt(total)}</span></div>
-                    <div className="delivery-opts" style={{margin:'1rem 0'}}>
-                      {[['express','fa-bolt','Expressa','45 min · R$ 8,90'],['standard','fa-truck','Padrão','2–4h · Grátis >R$100'],['pickup','fa-store','Retirar','Pronto em 30 min']].map(([val,icon,label,sub])=>(
-                        <label key={val} className={`delivery-opt${delivery===val?' checked':''}`}>
-                          <input type="radio" name="delivery" value={val} checked={delivery===val} onChange={()=>setDelivery(val)} />
-                          <div className="opt-info"><strong><i className={`fa-solid ${icon}`} /> {label}</strong><span>{sub}</span></div>
-                        </label>
-                      ))}
-                    </div>
-                    <div className="coupon-row">
-                      <input placeholder="Cupom de desconto" value={coupon} onChange={e=>setCoupon(e.target.value)} />
-                      <button className="btn btn-outline btn-sm" onClick={applyCoupon}>Aplicar</button>
-                    </div>
-                    <button className="btn btn-primary btn-full" style={{marginTop:'1rem'}} onClick={()=>{if(cartItems.length===0){showToast('Adicione produtos.','error');return;}setCheckoutStep(1);}}>
-                      <i className="fa-solid fa-lock" /> Finalizar pedido
-                    </button>
-                    <button className="btn btn-ghost btn-full" style={{marginTop:'.5rem'}} onClick={()=>setPage('shop')}>Continuar comprando</button>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {page==='cart' && (
+            <ClientCart
+              cartItems={cartItems} subtotal={subtotal} freight={freight} discount={discount} total={total}
+              changeQty={changeQty} removeFromCart={removeFromCart} setPage={setPage}
+              delivery={delivery} setDelivery={setDelivery}
+              coupon={coupon} setCoupon={setCoupon} applyCoupon={applyCoupon}
+              setCheckoutStep={setCheckoutStep} showToast={showToast}
+            />
           )}
-
-          {/* ══ ORDERS ══════════════════════════════════════ */}
-          {page==='orders'&&(
-            <div>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem'}}>
-                <h2 style={{fontFamily:'var(--font-head)',fontSize:'1.8rem',fontWeight:900}}>Meus Pedidos</h2>
-                <button className="btn btn-outline btn-sm" onClick={loadOrders}><i className="fa-solid fa-rotate" /> Atualizar</button>
-              </div>
-              {ordLoading?(
-                <div style={{textAlign:'center',padding:'3rem'}}><i className="fa-solid fa-spinner fa-spin" style={{fontSize:'2rem',color:'var(--red)'}} /></div>
-              ):orders.length===0?(
-                <div className="empty-state"><i className="fa-solid fa-box-open" /><p>Nenhum pedido ainda.</p><button className="btn btn-primary" onClick={()=>setPage('shop')} style={{marginTop:'.5rem'}}>Fazer primeiro pedido</button></div>
-              ):orders.map(o=>{
-                const steps=['Confirmado','Em preparo','Enviado','Entregue'];
-                const stepIdx=o.status==='pending'?0:o.status==='preparing'?1:o.status==='shipped'?2:o.status==='delivered'?4:0;
-                return(
-                  <div key={o.id} className="client-order-card dash-card" style={{marginBottom:'1rem'}}>
-                    <div className="client-order-header">
-                      <div>
-                        <strong className="order-id">{o.order_number}</strong>
-                        <div style={{fontSize:'.82rem',color:'var(--gray-400)',marginTop:'.15rem'}}>{o.store?.name||'—'} · {new Date(o.created_at).toLocaleDateString('pt-BR')}</div>
-                      </div>
-                      <span className={`status-badge status-${o.status}`}>{statusLabel(o.status)}</span>
-                    </div>
-                    <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',margin:'.8rem 0'}}>
-                      {o.items?.map((it,i)=><span key={i} style={{background:'var(--gray-100)',padding:'.3rem .8rem',borderRadius:6,fontSize:'.82rem'}}>{it.product_name} x{it.quantity}</span>)}
-                    </div>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem'}}>
-                      <span style={{fontSize:'.9rem',color:'var(--gray-500)'}}>Total: <strong style={{fontFamily:'var(--font-head)',color:'var(--gray-900)'}}>{fmt(o.total)}</strong></span>
-                    </div>
-                    <div className="track-bar">
-                      {steps.map((s,i)=>(
-                        <React.Fragment key={s}>
-                          <div className="track-step">
-                            <div className={`track-dot${i<stepIdx?' done':i===stepIdx-1?' active':''}`}><i className="fa-solid fa-check" style={{fontSize:'.6rem'}} /></div>
-                            <span className={`track-label${i<stepIdx?' done':''}`}>{s}</span>
-                          </div>
-                          {i<steps.length-1&&<div className={`track-line${i<stepIdx-1?' done':''}`} />}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                    {o.status==='delivered' && !o.reviewed && (
-                      <button className="btn btn-outline btn-sm" style={{marginTop:'1rem'}} onClick={()=>{setReviewModal(o);setReviewForm({rating:5,comment:''});}}>
-                        <i className="fa-solid fa-star" /> Avaliar pedido
-                      </button>
-                    )}
-                    {o.status==='delivered' && o.reviewed && (
-                      <div style={{marginTop:'1rem',fontSize:'.82rem',color:'var(--green)'}}>
-                        <i className="fa-solid fa-circle-check" /> Avaliação enviada
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+          {page==='orders' && (
+            <ClientOrders
+              orders={orders} ordLoading={ordLoading} loadOrders={loadOrders} setPage={setPage}
+              setReviewModal={setReviewModal} setReviewForm={setReviewForm}
+            />
           )}
-
-          {/* ══ FAVORITES ═══════════════════════════════════ */}
-          {page==='favorites'&&(
-            <div>
-              <h2 style={{fontFamily:'var(--font-head)',fontSize:'1.8rem',fontWeight:900,marginBottom:'1.5rem'}}>Favoritos</h2>
-              {favorites.length>0
-                ?<div className="products-grid">{products.filter(p=>favorites.includes(p.id)).map(p=><ProductCard key={p.id} product={p} theme="light" onOpen={setProductModal} onCompare={setCompareProduct} />)}</div>
-                :<div className="empty-state"><i className="fa-solid fa-heart" /><p>Nenhum produto favoritado.</p><button className="btn btn-outline" onClick={()=>setPage('shop')} style={{marginTop:'.5rem'}}>Explorar produtos</button></div>}
-            </div>
+          {page==='favorites' && (
+            <ClientFavorites
+              favorites={favorites} products={products||[]} setPage={setPage} setProductModal={setProductModal}
+            />
           )}
-
-          {/* ══ PROFILE ═════════════════════════════════════ */}
-          {page==='profile'&&(
-            <div>
-              <h2 style={{fontFamily:'var(--font-head)',fontSize:'1.8rem',fontWeight:900,marginBottom:'1.5rem'}}>Meu Perfil</h2>
-              <div className="settings-grid">
-                <div className="dash-card">
-                  <h3 style={{fontFamily:'var(--font-head)',fontSize:'1.1rem',fontWeight:700,marginBottom:'1.2rem'}}>Dados pessoais</h3>
-                  <form onSubmit={saveProfile}>
-                    {[['Nome','name','text'],['Telefone','phone','tel'],['CPF','cpf','text']].map(([label,field,type])=>(
-                      <div key={field} className="form-group">
-                        <label>{label}</label>
-                        <input type={type} value={profileForm[field]||''} onChange={e=>setProfileForm(f=>({...f,[field]:e.target.value}))} />
-                      </div>
-                    ))}
-                    <div className="form-group"><label>E-mail</label><input value={user?.email||''} disabled style={{opacity:.6}} /></div>
-                    <button type="submit" className="btn btn-primary" disabled={profSaving}>
-                      {profSaving?<><i className="fa-solid fa-spinner fa-spin" /> Salvando…</>:'Salvar'}
-                    </button>
-                  </form>
-                </div>
-
-                <div style={{display:'flex',flexDirection:'column',gap:'1rem'}}>
-                  <div className="dash-card">
-                    <h3 style={{fontFamily:'var(--font-head)',fontSize:'1.1rem',fontWeight:700,marginBottom:'1rem'}}>Endereços</h3>
-                    {addrLoading?<div className="loading-pulse" style={{height:60}} />:addresses.map(a=>(
-                      <div key={a.id} style={{display:'flex',alignItems:'center',gap:'.8rem',background:'var(--gray-100)',borderRadius:'var(--radius)',padding:'.75rem 1rem',marginBottom:'.5rem'}}>
-                        <i className="fa-solid fa-location-dot" style={{color:'var(--red)'}} />
-                        <span style={{flex:1,fontSize:'.9rem'}}>{a.street}{a.number?`, ${a.number}`:''} — {a.city}, {a.state}</span>
-                        {a.is_default&&<span style={{fontSize:'.72rem',background:'var(--red)',color:'#fff',padding:'.15rem .5rem',borderRadius:4}}>Principal</span>}
-                        <button style={{background:'none',border:'none',cursor:'pointer',color:'var(--gray-400)'}} onClick={()=>removeAddress(a.id)}><i className="fa-solid fa-xmark" /></button>
-                      </div>
-                    ))}
-                    <button className="btn btn-outline btn-full" style={{marginTop:'.5rem'}} onClick={addAddress}><i className="fa-solid fa-plus" /> Novo endereço</button>
-                  </div>
-
-                  <div className="dash-card">
-                    <h3 style={{fontFamily:'var(--font-head)',fontSize:'1.1rem',fontWeight:700,marginBottom:'1rem'}}>Veículos</h3>
-                    <div style={{display:'flex',gap:'.7rem',flexWrap:'wrap'}}>
-                      {vehicles.map(v=>(
-                        <div key={v.id} style={{display:'flex',alignItems:'center',gap:'.5rem',background:'var(--gray-100)',border:'2px solid var(--gray-200)',borderRadius:'var(--radius)',padding:'.5rem 1rem',fontSize:'.88rem'}}>
-                          <i className="fa-solid fa-car" style={{color:'var(--red)'}} />{v.brand} {v.model} {v.year&&`(${v.year})`}
-                        </div>
-                      ))}
-                    </div>
-                    <button className="btn btn-outline" style={{marginTop:'1rem'}} onClick={addVehicle}><i className="fa-solid fa-plus" /> Adicionar veículo</button>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {page==='profile' && (
+            <ClientProfile
+              user={user} profile={profile} profileForm={profileForm} setProfileForm={setProfileForm}
+              profSaving={profSaving} saveProfile={saveProfile}
+              addresses={addresses} addrLoading={addrLoading} loadAddresses={loadAddresses} removeAddress={removeAddress}
+              vehicles={vehicles} showToast={showToast}
+            />
           )}
-
         </div>
       </main>
 
-      {/* PRODUCT MODAL */}
-      {productModal&&(
+      {productModal && (
         <Modal open title={productModal.name} onClose={()=>setProductModal(null)} size="lg">
           <div className="product-detail-modal">
             <div className="product-detail-img">{productModal.icon}</div>
@@ -759,24 +288,19 @@ export default function Client() {
         </Modal>
       )}
 
-      {/* COMPARE MODAL */}
-      {compareProduct&&(
+      {compareProduct && (
         <Modal open title={`Comparar — ${compareProduct.name}`} onClose={()=>setCompareProduct(null)} size="compare">
           <PriceComparison product={compareProduct} onClose={()=>setCompareProduct(null)} />
         </Modal>
       )}
 
-      {/* CHECKOUT MODAL */}
-      {checkoutStep>0&&(
+      {checkoutStep>0 && (
         <Modal open title="Finalizar Pedido" onClose={()=>setCheckoutStep(0)}>
-          {checkoutStep===1&&(
+          {checkoutStep===1 && (
             <div>
               <h4 style={{fontFamily:'var(--font-head)',fontWeight:700,marginBottom:'1rem'}}>Endereço de entrega</h4>
               {addresses.length===0?(
-                <div style={{marginBottom:'1rem'}}>
-                  <p style={{color:'var(--gray-400)',marginBottom:'.8rem',fontSize:'.9rem'}}>Nenhum endereço cadastrado.</p>
-                  <button className="btn btn-outline btn-sm" onClick={addAddress}><i className="fa-solid fa-plus" /> Adicionar endereço</button>
-                </div>
+                <p style={{color:'var(--gray-400)',marginBottom:'1rem',fontSize:'.9rem'}}>Nenhum endereço cadastrado.</p>
               ):(
                 <div style={{display:'flex',flexDirection:'column',gap:'.5rem',marginBottom:'1rem'}}>
                   {addresses.map(a=>(
@@ -790,7 +314,7 @@ export default function Client() {
               <button className="btn btn-primary btn-full" onClick={()=>setCheckoutStep(2)}>Continuar → Pagamento</button>
             </div>
           )}
-          {checkoutStep===2&&(
+          {checkoutStep===2 && (
             <div>
               <h4 style={{fontFamily:'var(--font-head)',fontWeight:700,marginBottom:'1rem'}}>Forma de pagamento</h4>
               <div style={{display:'flex',flexDirection:'column',gap:'.6rem',marginBottom:'1rem'}}>
@@ -805,7 +329,7 @@ export default function Client() {
               <button className="btn btn-primary btn-full" onClick={confirmOrder}><i className="fa-solid fa-lock" /> Confirmar pedido</button>
             </div>
           )}
-          {checkoutStep===3&&(
+          {checkoutStep===3 && (
             <div style={{textAlign:'center',padding:'1rem 0'}}>
               <i className="fa-solid fa-circle-check" style={{fontSize:'3.5rem',color:'var(--green)',display:'block',marginBottom:'1rem'}} />
               <h3 style={{fontFamily:'var(--font-head)',fontSize:'1.6rem',fontWeight:900,marginBottom:'.5rem'}}>Pedido confirmado!</h3>
@@ -814,6 +338,36 @@ export default function Client() {
               <button className="btn btn-primary" onClick={()=>{setCheckoutStep(0);setPage('orders');}}>Ver meus pedidos</button>
             </div>
           )}
+        </Modal>
+      )}
+
+      {reviewModal && (
+        <Modal open title="Avaliar pedido" onClose={()=>setReviewModal(null)}>
+          <form onSubmit={submitReview}>
+            <p style={{color:'var(--gray-500)',marginBottom:'1rem',fontSize:'.9rem'}}>
+              Pedido <strong>{reviewModal.order_number}</strong> — {reviewModal.store?.name}
+            </p>
+            <div className="form-group">
+              <label>Sua nota</label>
+              <div style={{display:'flex',gap:'.5rem',margin:'.5rem 0'}}>
+                {[1,2,3,4,5].map(s=>(
+                  <button key={s} type="button"
+                    onClick={()=>setReviewForm(f=>({...f,rating:s}))}
+                    style={{fontSize:'1.8rem',background:'none',border:'none',cursor:'pointer',color:s<=reviewForm.rating?'#F5A623':'var(--gray-300)',transition:'color .15s'}}>★</button>
+                ))}
+                <span style={{fontSize:'.9rem',color:'var(--gray-400)',alignSelf:'center',marginLeft:'.3rem'}}>{reviewForm.rating}/5</span>
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Comentário (opcional)</label>
+              <textarea rows={3} placeholder="Como foi sua experiência?" value={reviewForm.comment}
+                onChange={e=>setReviewForm(f=>({...f,comment:e.target.value}))}
+                style={{width:'100%',padding:'.7rem',border:'2px solid var(--gray-200)',borderRadius:'var(--radius)',fontSize:'.9rem',resize:'vertical'}} />
+            </div>
+            <button type="submit" className="btn btn-primary btn-full" disabled={reviewSaving}>
+              {reviewSaving?<><i className="fa-solid fa-spinner fa-spin" /> Enviando…</>:<><i className="fa-solid fa-star" /> Enviar avaliação</>}
+            </button>
+          </form>
         </Modal>
       )}
     </div>

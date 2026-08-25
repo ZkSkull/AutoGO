@@ -5,6 +5,7 @@ import Sidebar from '../../components/Sidebar';
 import Modal from '../../components/Modal';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase.js';
+import { storesApi, ordersApi, reviewsApi, productsApi, geoApi } from '../../lib/api';
 import { fmt, statusLabel } from '../../data';
 import ImageUpload from '../../components/ImageUpload';
 import './Merchant.css';
@@ -40,6 +41,7 @@ export default function Merchant() {
   const [form,        setForm]        = useState(EMPTY_FORM);
   const [saving,      setSaving]      = useState(false);
   const [searchProd,  setSearchProd]  = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   // Orders
   const [orders,      setOrders]      = useState([]);
@@ -51,9 +53,12 @@ export default function Merchant() {
   // Reviews
   const [reviews,     setReviews]     = useState([]);
 
+  // Receita dos últimos 7 dias
+  const [weekRevenue, setWeekRevenue] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [weekLabels,  setWeekLabels]  = useState(['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']);
+
   // Settings form
   const [storeForm,   setStoreForm]   = useState({});
-  const [storeHours,  setStoreHours]  = useState([]);
 
   const realtimeRef = useRef(null);
 
@@ -62,12 +67,7 @@ export default function Merchant() {
     if (!user) return;
     setStoreLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('stores')
-        .select('*')
-        .eq('owner_id', user.id)
-        .single();
-      if (error && error.code !== 'PGRST116') throw error;
+      const data = await storesApi.getMyStore(user.id);
       setStore(data);
       if (data) {
         setStoreForm({
@@ -83,6 +83,7 @@ export default function Merchant() {
         loadProducts(data.id);
         loadOrders(data.id);
         loadReviews(data.id);
+        loadWeekRevenue(data.id);
         subscribeOrders(data.id);
       }
     } catch (err) {
@@ -118,15 +119,9 @@ export default function Merchant() {
   const loadProducts = async (storeId) => {
     setProdLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('store_id', storeId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const { data } = await productsApi.list({ storeId, limit: 200 });
       setProducts(data || []);
-    } catch (err) { showToast('Erro ao carregar produtos.', 'error'); }
+    } catch { showToast('Erro ao carregar produtos.', 'error'); }
     finally { setProdLoading(false); }
   };
 
@@ -168,12 +163,12 @@ export default function Merchant() {
   };
 
   const handleDeleteProduct = async (id) => {
-    if (!confirm('Remover este produto?')) return;
     try {
       await supabase.from('products').update({ is_active: false }).eq('id', id);
       setProducts(prev => prev.filter(p => p.id !== id));
+      setConfirmDelete(null);
       showToast('Produto removido.', 'info');
-    } catch (err) { showToast('Erro ao remover.', 'error'); }
+    } catch { showToast('Erro ao remover.', 'error'); }
   };
 
   const openEdit = (p) => {
@@ -187,48 +182,80 @@ export default function Merchant() {
   const loadOrders = async (storeId) => {
     setOrderLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`*, client:profiles(name, phone), address:addresses(street, number, city), items:order_items(product_name, quantity, product_price, subtotal)`)
-        .eq('store_id', storeId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const data = await ordersApi.getStoreOrders(storeId);
       setOrders(data || []);
-    } catch (err) { showToast('Erro ao carregar pedidos.', 'error'); }
+    } catch { showToast('Erro ao carregar pedidos.', 'error'); }
     finally { setOrderLoading(false); }
   };
 
   const handleUpdateOrderStatus = async (orderId, status) => {
     try {
-      const updates = { status };
-      if (status === 'delivered') updates.delivered_at = new Date().toISOString();
-      await supabase.from('orders').update(updates).eq('id', orderId);
+      await ordersApi.updateStatus(orderId, status);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
       setOrderModal(null);
       showToast('Status atualizado!', 'success');
-    } catch (err) { showToast('Erro ao atualizar status.', 'error'); }
+    } catch { showToast('Erro ao atualizar status.', 'error'); }
   };
 
-  // ── Avaliações ────────────────────────────────────────────────────────────
   const loadReviews = async (storeId) => {
     try {
-      const { data } = await supabase
-        .from('reviews')
-        .select('*, user:profiles(name)')
-        .eq('store_id', storeId)
-        .order('created_at', { ascending: false });
+      const data = await reviewsApi.getStoreReviews(storeId);
       setReviews(data || []);
-    } catch (err) { console.error(err); }
+    } catch { console.error('Erro ao carregar avaliações.'); }
   };
 
-  // ── Configurações da loja ─────────────────────────────────────────────────
+  // ── Receita dos últimos 7 dias (dados reais) ──────────────────────────────
+  const loadWeekRevenue = async (storeId) => {
+    try {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+
+      const { data, error } = await supabase
+        .from('orders')
+        .select('total, status, created_at')
+        .eq('store_id', storeId)
+        .eq('status', 'delivered')
+        .gte('created_at', sevenDaysAgo.toISOString());
+      if (error) throw error;
+
+      // Buckets dos últimos 7 dias (hoje incluído), rotulados por dia da semana
+      const days = [];
+      const labels = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(d.toISOString().slice(0, 10));
+        labels.push(d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''));
+      }
+
+      const totals = days.map(day =>
+        (data || [])
+          .filter(o => o.created_at?.slice(0, 10) === day)
+          .reduce((s, o) => s + (o.total || 0), 0)
+      );
+
+      setWeekLabels(labels.map((l, i) => i === 6 ? l : l[0].toUpperCase() + l.slice(1)));
+      setWeekRevenue(totals);
+    } catch (err) {
+      console.error('Erro ao carregar receita semanal:', err);
+      setWeekRevenue([0, 0, 0, 0, 0, 0, 0]);
+    }
+  };
+
   const handleSaveStore = async (e) => {
     e.preventDefault();
     if (!store) return;
     try {
-      const { error } = await supabase.from('stores').update(storeForm).eq('id', store.id);
-      if (error) throw error;
-      setStore(prev => ({ ...prev, ...storeForm }));
+      // Geocoding best-effort quando só o endereço mudou
+      const addressChanged = storeForm.address !== store.address;
+      const updates = { ...storeForm };
+      if (addressChanged) {
+        const geo = await geoApi.geocode(storeForm.address);
+        if (geo) { updates.lat = geo.lat; updates.lng = geo.lng; }
+      }
+      await storesApi.update(store.id, updates);
+      setStore(prev => ({ ...prev, ...updates }));
       showToast('Configurações salvas!', 'success');
     } catch (err) { showToast('Erro ao salvar: ' + err.message, 'error'); }
   };
@@ -265,15 +292,14 @@ export default function Merchant() {
           e.preventDefault();
           const fd = new FormData(e.target);
           try {
-            const { data, error } = await supabase.from('stores').insert({
+            const data = await storesApi.create({
               owner_id: user.id,
               name: fd.get('name'),
               phone: fd.get('phone'),
               email: user.email,
               address: fd.get('address'),
               cnpj: fd.get('cnpj'),
-            }).select().single();
-            if (error) throw error;
+            });
             setStore(data);
             showToast('Loja criada com sucesso!', 'success');
           } catch (err) { showToast('Erro: ' + err.message, 'error'); }
@@ -392,8 +418,8 @@ export default function Merchant() {
                 <div className="card-header"><h3>Receita — últimos 7 dias</h3></div>
                 <Bar
                   data={{
-                    labels: ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'],
-                    datasets: [{ data: [0,0,0,0,0,0,todayRevenue], backgroundColor: 'rgba(225,26,44,.8)', borderRadius: 6, hoverBackgroundColor: '#E11A2C' }]
+                    labels: weekLabels,
+                    datasets: [{ data: weekRevenue, backgroundColor: 'rgba(225,26,44,.8)', borderRadius: 6, hoverBackgroundColor: '#E11A2C' }]
                   }}
                   options={{ responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: v => 'R$'+v } }, x: { grid: { display: false } } } }}
                 />
@@ -572,7 +598,7 @@ export default function Merchant() {
                               <td>
                                 <div style={{ display: 'flex', gap: '.4rem' }}>
                                   <button className="btn btn-outline btn-sm" onClick={() => openEdit(p)}><i className="fa-solid fa-pen" /></button>
-                                  <button className="btn btn-sm" style={{ background: 'rgba(225,26,44,.08)', color: 'var(--red)', border: '2px solid rgba(225,26,44,.2)' }} onClick={() => handleDeleteProduct(p.id)}><i className="fa-solid fa-trash" /></button>
+                                  <button className="btn btn-sm" style={{ background: 'rgba(225,26,44,.08)', color: 'var(--red)', border: '2px solid rgba(225,26,44,.2)' }} onClick={() => setConfirmDelete(p)}><i className="fa-solid fa-trash" /></button>
                                 </div>
                               </td>
                             </tr>
@@ -659,10 +685,23 @@ export default function Merchant() {
                       <label>Descrição</label>
                       <textarea rows={3} value={storeForm.description || ''} onChange={e => setStoreForm(f => ({ ...f, description: e.target.value }))} placeholder="Conte um pouco sobre sua loja..." />
                     </div>
+                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label>Abre às</label>
+                        <input type="time" value={storeForm.open_time || ''} onChange={e => setStoreForm(f => ({ ...f, open_time: e.target.value || null }))} />
+                      </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label>Fecha às</label>
+                        <input type="time" value={storeForm.close_time || ''} onChange={e => setStoreForm(f => ({ ...f, close_time: e.target.value || null }))} />
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '.78rem', color: 'var(--gray-400)', margin: '-.5rem 0 1rem' }}>
+                      Preenchendo os horários, o status "Aberta/Fechada" passa a ser automático.
+                    </p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '.8rem', marginBottom: '1rem' }}>
                       <label style={{ fontWeight: 600, fontSize: '.9rem' }}>Status da loja:</label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={storeForm.is_open ?? true} onChange={e => setStoreForm(f => ({ ...f, is_open: e.target.checked }))} />
+                        <input type="checkbox" checked={storeForm.is_open ?? true} disabled={!!(storeForm.open_time && storeForm.close_time)} onChange={e => setStoreForm(f => ({ ...f, is_open: e.target.checked }))} />
                         {storeForm.is_open ? '🟢 Aberta' : '🔴 Fechada'}
                       </label>
                     </div>
@@ -729,6 +768,24 @@ export default function Merchant() {
               <span style={{ color: 'var(--red)', fontFamily: 'var(--font-head)', fontSize: '1.1rem', fontWeight: 900 }}>{fmt(orderModal.total)}</span>
             </div>
           </div>
+        </Modal>
+      )}
+      {/* DELETE PRODUCT MODAL */}
+      {confirmDelete && (
+        <Modal open title="Remover produto" onClose={() => setConfirmDelete(null)}
+          footer={
+            <div style={{ display: 'flex', gap: '.6rem', justifyContent: 'flex-end', width: '100%' }}>
+              <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>Cancelar</button>
+              <button className="btn btn-primary" style={{ background: 'var(--red)', borderColor: 'var(--red)' }} onClick={() => handleDeleteProduct(confirmDelete.id)}>
+                <i className="fa-solid fa-trash" /> Remover
+              </button>
+            </div>
+          }
+        >
+          <p style={{ color: 'var(--gray-500)', fontSize: '.9rem' }}>
+            Tem certeza que deseja remover <strong>{confirmDelete.name}</strong>?
+            O produto deixará de aparecer na loja, mas o histórico de pedidos será mantido.
+          </p>
         </Modal>
       )}
     </div>

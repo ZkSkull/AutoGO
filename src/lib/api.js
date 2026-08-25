@@ -1,5 +1,8 @@
 import { supabase } from './supabase';
 
+// Escapa caracteres curinga do LIKE (%, _) e a própria barra invertida
+const escapeLike = (str) => String(str).replace(/[\\%_]/g, (m) => `\\${m}`);
+
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 
 export const authApi = {
@@ -7,45 +10,6 @@ export const authApi = {
   async login(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    return data;
-  },
-
-  /** Cadastro — cria usuário e perfil */
-  async register({ email, password, name, role, phone, storeName, cnpj, address, vehicleType, cpf }) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name, role },  // vai para raw_user_meta_data → trigger cria profile
-      },
-    });
-    if (error) throw error;
-
-    const userId = data.user.id;
-
-    // Complementar o perfil com campos extras
-    await supabase.from('profiles').update({ phone, cpf }).eq('id', userId);
-
-    // Se for comerciante, criar a loja
-    if (role === 'merchant' && storeName) {
-      await supabase.from('stores').insert({
-        owner_id: userId,
-        name: storeName,
-        cnpj,
-        address,
-        email,
-        phone,
-      });
-    }
-
-    // Se for entregador, criar registro na tabela drivers
-    if (role === 'driver') {
-      await supabase.from('drivers').insert({
-        id: userId,
-        vehicle_type: vehicleType || 'moto',
-      });
-    }
-
     return data;
   },
 
@@ -87,8 +51,14 @@ export const authApi = {
   /** Recuperar senha */
   async resetPassword(email) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${window.location.origin}/reset-password?type=recovery`,
     });
+    if (error) throw error;
+  },
+
+  /** Redefinir senha (usuário autenticado via link de recuperação) */
+  async updatePassword(newPassword) {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
   },
 };
@@ -96,7 +66,7 @@ export const authApi = {
 // ─── PRODUTOS ────────────────────────────────────────────────────────────────
 
 export const productsApi = {
-  /** Listar produtos com filtros */
+  /** Listar produtos com filtros (retorna { data, count }) */
   async list({ category, brand, condition, minPrice, maxPrice, minRating, onlyInStock, search, storeId, limit = 50, offset = 0 } = {}) {
     let q = supabase
       .from('products')
@@ -104,7 +74,7 @@ export const productsApi = {
         *,
         store:stores(id, name, rating, distance, is_open),
         category:categories(name, icon)
-      `)
+      `, { count: 'exact' })
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -118,12 +88,13 @@ export const productsApi = {
     if (minRating)  q = q.gte('rating', minRating);
     if (onlyInStock) q = q.gt('stock', 0);
     if (search) {
-      q = q.or(`name.ilike.%${search}%,brand.ilike.%${search}%,compatibility.ilike.%${search}%,code.ilike.%${search}%`);
+      const s = escapeLike(search);
+      q = q.or(`name.ilike.%${s}%,brand.ilike.%${s}%,compatibility.ilike.%${s}%,code.ilike.%${s}%`);
     }
 
-    const { data, error } = await q;
+    const { data, count, error } = await q;
     if (error) throw error;
-    return data;
+    return { data, count };
   },
 
   /** Buscar produto por ID */
@@ -226,12 +197,23 @@ export const storesApi = {
     if (error) throw error;
     return data;
   },
+
+  /** Criar nova loja */
+  async create(data) {
+    const { data: store, error } = await supabase
+      .from('stores')
+      .insert(data)
+      .select()
+      .single();
+    if (error) throw error;
+    return store;
+  },
 };
 
 // ─── PEDIDOS ─────────────────────────────────────────────────────────────────
 
 export const ordersApi = {
-  /** Cliente cria pedido */
+  /** Cliente cria pedido (pedido + itens + baixa de estoque) */
   async create({ clientId, storeId, addressId, items, subtotal, freight, discount, total, deliveryType, paymentMethod }) {
     // 1. Criar o pedido
     const { data: order, error: orderError } = await supabase
@@ -246,6 +228,7 @@ export const ordersApi = {
         total,
         delivery_type:  deliveryType,
         payment_method: paymentMethod,
+        status:         'pending',
       })
       .select()
       .single();
@@ -254,11 +237,11 @@ export const ordersApi = {
     // 2. Criar os itens
     const orderItems = items.map(item => ({
       order_id:      order.id,
-      product_id:    item.productId,
-      product_name:  item.name,
-      product_price: item.price,
-      quantity:      item.qty,
-      subtotal:      item.price * item.qty,
+      product_id:    item.product_id ?? item.productId,
+      product_name:  item.product_name ?? item.name,
+      product_price: item.product_price ?? item.price,
+      quantity:      item.quantity ?? item.qty,
+      subtotal:      item.subtotal ?? (item.price ?? item.product_price) * (item.qty ?? item.quantity),
     }));
 
     const { error: itemsError } = await supabase
@@ -267,11 +250,12 @@ export const ordersApi = {
     if (itemsError) throw itemsError;
 
     // 3. Diminuir estoque de cada produto
-    for (const item of items) {
-      await supabase.rpc('decrement_stock', {
-        p_product_id: item.productId,
-        p_quantity:   item.qty,
+    for (const item of orderItems) {
+      const { error: stockError } = await supabase.rpc('decrement_stock', {
+        p_product_id: item.product_id,
+        p_quantity:   item.quantity,
       });
+      if (stockError) throw stockError;
     }
 
     return order;
@@ -337,20 +321,62 @@ export const favoritesApi = {
   },
 
   async toggle(userId, productId) {
-    // Verifica se já existe
-    const { data: existing } = await supabase
+    // Tenta inserir; se a constraint única (user_id, product_id) já existir, remove.
+    const { error } = await supabase
       .from('favorites')
-      .select('user_id')
-      .eq('user_id', userId)
-      .eq('product_id', productId)
-      .single();
+      .insert({ user_id: userId, product_id: productId });
+    if (!error) return true; // adicionado
 
-    if (existing) {
+    if (error.code === '23505') {
       await supabase.from('favorites').delete().eq('user_id', userId).eq('product_id', productId);
       return false; // removido
-    } else {
-      await supabase.from('favorites').insert({ user_id: userId, product_id: productId });
-      return true;  // adicionado
+    }
+    throw error;
+  },
+};
+
+// ─── CARRINHO (sincronizado) ─────────────────────────────────────────────────
+
+export const cartApi = {
+  /** Buscar carrinho do usuário no banco */
+  async list(userId) {
+    const { data, error } = await supabase
+      .from('cart_items')
+      .select('product_id, quantity')
+      .eq('user_id', userId);
+    if (error) throw error;
+    return data || [];
+  },
+
+  /** Substitui o carrinho inteiro do usuário (upsert em lote) */
+  async replace(userId, items) {
+    if (!items.length) {
+      const { error } = await supabase.from('cart_items').delete().eq('user_id', userId);
+      if (error) throw error;
+      return;
+    }
+    const rows = items.map(i => ({ user_id: userId, product_id: i.id, quantity: i.qty }));
+    const { error } = await supabase.from('cart_items').upsert(rows, { onConflict: 'user_id,product_id' });
+    if (error) throw error;
+  },
+};
+
+// ─── GEOCODING (Nominatim/OSM) ───────────────────────────────────────────────
+
+export const geoApi = {
+  /** Converte endereço em { lat, lng } — retorna null se não conseguir */
+  async geocode(address) {
+    if (!address || !address.trim()) return null;
+    try {
+      const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' +
+        encodeURIComponent(address + ', Brasil');
+      const res = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
+      if (!res.ok) return null;
+      const rows = await res.json();
+      if (!rows?.length) return null;
+      return { lat: parseFloat(rows[0].lat), lng: parseFloat(rows[0].lon) };
+    } catch {
+      return null; // geocoding é best-effort
     }
   },
 };
@@ -417,13 +443,29 @@ export const driversApi = {
       .from('orders')
       .select(`
         *,
-        store:stores(name, address, lat, lng),
+        store:stores(name, address, city, lat, lng),
         address:addresses(street, number, city, lat, lng),
         client:profiles(name, phone)
       `)
       .eq('status', 'preparing')
       .is('driver_id', null)
       .order('created_at', { ascending: true });
+    if (error && error.code === '42703') {
+      // Migration de geo ainda não aplicada — busca sem lat/lng
+      const { data: fallback, error: fErr } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          store:stores(name, address, city),
+          address:addresses(street, number, city),
+          client:profiles(name, phone)
+        `)
+        .eq('status', 'preparing')
+        .is('driver_id', null)
+        .order('created_at', { ascending: true });
+      if (fErr) throw fErr;
+      return fallback;
+    }
     if (error) throw error;
     return data;
   },
@@ -464,6 +506,70 @@ export const driversApi = {
       .from('drivers')
       .update({ is_online: isOnline })
       .eq('id', driverId);
+    if (error) throw error;
+  },
+
+  /** Buscar dados do entregador */
+  async getDriver(driverId) {
+    const { data, error } = await supabase
+      .from('drivers')
+      .select('*')
+      .eq('id', driverId)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  },
+
+  /** Atualizar dados do entregador */
+  async updateDriver(driverId, updates) {
+    const { error } = await supabase
+      .from('drivers')
+      .upsert({ id: driverId, ...updates });
+    if (error) throw error;
+  },
+};
+
+// ─── VEÍCULOS ─────────────────────────────────────────────────────────────────
+
+export const vehiclesApi = {
+  async list(userId) {
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('*')
+      .eq('user_id', userId);
+    if (error) throw error;
+    return data || [];
+  },
+
+  async create(userId, vehicle) {
+    const { data, error } = await supabase
+      .from('vehicles')
+      .insert({ ...vehicle, user_id: userId })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+};
+
+// ─── PERFIS ───────────────────────────────────────────────────────────────────
+
+export const profilesApi = {
+  async get(userId) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async update(userId, updates) {
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', userId);
     if (error) throw error;
   },
 };

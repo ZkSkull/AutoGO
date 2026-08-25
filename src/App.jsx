@@ -1,19 +1,21 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import Toast from './components/Toast';
+import ErrorBoundary from './components/ErrorBoundary';
 
-import Home         from './pages/Home/Home';
-import Auth         from './pages/Auth/Auth';
-import Categorias   from './pages/Categorias/Categorias';
-import Lojas        from './pages/Lojas/Lojas';
-import Marcas       from './pages/Marcas/Marcas';
-import ComoFunciona from './pages/ComoFunciona/ComoFunciona';
-import Produto      from './pages/Produto/Produto';
-import NotFound     from './pages/NotFound/NotFound';
-import Client       from './pages/Client/Client';
-import Merchant     from './pages/Merchant/Merchant';
-import Driver       from './pages/Driver/Driver';
+const Home         = lazy(() => import('./pages/Home/Home'));
+const Auth         = lazy(() => import('./pages/Auth/Auth'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword/ResetPassword'));
+const Categorias   = lazy(() => import('./pages/Categorias/Categorias'));
+const Lojas        = lazy(() => import('./pages/Lojas/Lojas'));
+const Marcas       = lazy(() => import('./pages/Marcas/Marcas'));
+const ComoFunciona = lazy(() => import('./pages/ComoFunciona/ComoFunciona'));
+const Produto      = lazy(() => import('./pages/Produto/Produto'));
+const NotFound     = lazy(() => import('./pages/NotFound/NotFound'));
+const Client       = lazy(() => import('./pages/Client/Client'));
+const Merchant     = lazy(() => import('./pages/Merchant/Merchant'));
+const Driver       = lazy(() => import('./pages/Driver/Driver'));
 
 function LoadingScreen() {
   return (
@@ -50,7 +52,8 @@ function AppRoutes() {
 
   return (
     <>
-      <Routes>
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
         <Route path="/"              element={<Home />} />
         <Route path="/categorias"    element={<Categorias />} />
         <Route path="/lojas"         element={<Lojas />} />
@@ -58,11 +61,13 @@ function AppRoutes() {
         <Route path="/como-funciona" element={<ComoFunciona />} />
         <Route path="/produto/:id"   element={<Produto />} />
         <Route path="/auth"          element={authRedirect} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/client"        element={<ProtectedRoute><Client /></ProtectedRoute>} />
         <Route path="/merchant"      element={<ProtectedRoute role="merchant"><Merchant /></ProtectedRoute>} />
         <Route path="/driver"        element={<ProtectedRoute role="driver"><Driver /></ProtectedRoute>} />
         <Route path="*"              element={<NotFound />} />
-      </Routes>
+        </Routes>
+      </Suspense>
       <Toast />
     </>
   );
@@ -70,10 +75,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppProvider>
-        <AppRoutes />
-      </AppProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AppProvider>
+          <AppRoutes />
+        </AppProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

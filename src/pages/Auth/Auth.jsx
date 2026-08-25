@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { supabase } from '../../lib/supabase.js';
+import { authApi } from '../../lib/api';
+import { loginSchema, registerSchema, forgotSchema, firstIssue } from '../../lib/validation';
 import './Auth.css';
 import logo from '../../assets/images/logo-auto-go-branco.png';
 
@@ -78,19 +79,16 @@ export default function Auth() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    if (!email || !pw) { setError('Preencha todos os campos.'); return; }
+    const check = loginSchema.safeParse({ email, password: pw });
+    if (!check.success) { setError(firstIssue(check)); return; }
     setLoading(true);
     try {
       const data = await login(email, pw);
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single();
+      const prof = await authApi.getProfile(data.user.id);
 
       showToast('Login realizado com sucesso!', 'success');
       setTimeout(() => {
-        const role = prof?.role || 'client';
+        const role = prof.role || 'client';
         if (role === 'merchant') navigate('/merchant');
         else if (role === 'driver') navigate('/driver');
         else navigate('/client');
@@ -106,9 +104,19 @@ export default function Auth() {
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
-    if (regPw !== confPw) { setError('As senhas não coincidem.'); return; }
-    if (regPw.length < 8) { setError('Senha mínima de 8 caracteres.'); return; }
-    if (!agreed) { setError('Aceite os termos para continuar.'); return; }
+    const check = registerSchema.safeParse({
+      name,
+      storeName,
+      phone,
+      cpf,
+      cnpj,
+      address: addr,
+      email,
+      password: regPw,
+      confirm: confPw,
+      agreed,
+    });
+    if (!check.success) { setError(firstIssue(check)); return; }
     setLoading(true);
     try {
       await register({
@@ -129,13 +137,11 @@ export default function Auth() {
   const handleForgot = async (e) => {
     if (e?.preventDefault) e.preventDefault();
     setForgotError('');
-    if (!forgotEmail) { setForgotError('Informe seu e-mail.'); return; }
+    const check = forgotSchema.safeParse({ email: forgotEmail });
+    if (!check.success) { setForgotError(firstIssue(check)); return; }
     setForgotLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-        redirectTo: `${window.location.origin}/auth?mode=reset`,
-      });
-      if (error) throw error;
+      await authApi.resetPassword(forgotEmail);
       setForgotSent(true);
     } catch {
       setForgotError('Não foi possível enviar o e-mail. Tente novamente.');

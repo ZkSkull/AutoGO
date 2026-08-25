@@ -3,8 +3,10 @@ import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js';
 import Sidebar from '../../components/Sidebar';
 import Modal from '../../components/Modal';
+import MapView from '../../components/MapView';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase.js';
+import { ordersApi, driversApi, profilesApi } from '../../lib/api';
 import { fmt } from '../../data';
 import './Driver.css';
 
@@ -77,7 +79,7 @@ export default function Driver() {
   const loadDriverData = async () => {
     setDriverLoading(true);
     try {
-      const { data } = await supabase.from('drivers').select('*').eq('id', user.id).single();
+      const data = await driversApi.getDriver(user.id);
       setDriverData(data);
       if (data) setIsOnline(data.is_online);
     } catch (err) { console.error(err); }
@@ -87,13 +89,7 @@ export default function Driver() {
   const loadQueue = async () => {
     setQueueLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`*, store:stores(name, address), address:addresses(street, number, city), client:profiles(name, phone), items:order_items(product_name, quantity)`)
-        .eq('status', 'preparing')
-        .is('driver_id', null)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
+      const data = await driversApi.getAvailableDeliveries();
       setQueue(data || []);
     } catch (err) { console.error(err); }
     finally { setQueueLoading(false); }
@@ -102,12 +98,7 @@ export default function Driver() {
   const loadMyDeliveries = async () => {
     setMyLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`*, store:stores(name, address), address:addresses(street, number, city), client:profiles(name, phone), items:order_items(product_name, quantity)`)
-        .eq('driver_id', user.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const data = await driversApi.getMyDeliveries(user.id);
       setMyDeliveries(data || []);
       const active = data?.find(d => d.status === 'shipped' || d.status === 'delivering');
       setActiveDelivery(active || null);
@@ -118,7 +109,7 @@ export default function Driver() {
   const updateOnlineStatus = async (online) => {
     if (!user) return;
     try {
-      await supabase.from('drivers').upsert({ id: user.id, is_online: online });
+      await driversApi.setOnline(user.id, online);
     } catch (err) { console.error(err); }
   };
 
@@ -162,15 +153,8 @@ export default function Driver() {
   const acceptDelivery = async (order) => {
     setAccepting(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .update({ driver_id: user.id, status: 'shipped' })
-        .eq('id', order.id)
-        .is('driver_id', null)
-        .select()
-        .single();
-
-      if (error || !data) throw new Error('Entrega já aceita por outro entregador.');
+      const data = await driversApi.acceptDelivery(order.id, user.id);
+      if (!data) throw new Error('Entrega já aceita por outro entregador.');
 
       const newDelivery = { ...order, ...data, status: 'shipped' };
       setActiveDelivery(newDelivery);
@@ -180,8 +164,7 @@ export default function Driver() {
       clearInterval(timerRef.current);
       showToast('Entrega aceita! Vá buscar o pedido.', 'success');
 
-      // Update driver stats
-      await supabase.from('drivers').update({ total_deliveries: (driverData?.total_deliveries||0) + 1 }).eq('id', user.id);
+      await driversApi.updateDriver(user.id, { total_deliveries: (driverData?.total_deliveries||0) + 1 });
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
@@ -192,10 +175,7 @@ export default function Driver() {
   // ── Update delivery status ────────────────────────────────
   const updateDeliveryStatus = async (orderId, status) => {
     try {
-      const updates = { status };
-      if (status === 'delivered') updates.delivered_at = new Date().toISOString();
-
-      await supabase.from('orders').update(updates).eq('id', orderId);
+      await ordersApi.updateStatus(orderId, status);
       setMyDeliveries(prev => prev.map(d => d.id === orderId ? { ...d, status } : d));
       if (activeDelivery?.id === orderId) {
         if (status === 'delivered') setActiveDelivery(null);
@@ -204,9 +184,8 @@ export default function Driver() {
       showToast(`Status atualizado: ${sl(status)}`, 'success');
 
       if (status === 'delivered') {
-        // Adicionar ganho ao entregador
         const earnings = (activeDelivery?.freight || 8.90) * 0.7;
-        await supabase.from('drivers').update({ balance: (driverData?.balance||0) + earnings }).eq('id', user.id);
+        await driversApi.updateDriver(user.id, { balance: (driverData?.balance||0) + earnings });
         loadDriverData();
       }
     } catch (err) {
@@ -214,12 +193,11 @@ export default function Driver() {
     }
   };
 
-  // ── Save profile ──────────────────────────────────────────
   const saveProfile = async (e) => {
     e.preventDefault();
     setProfSaving(true);
     try {
-      await supabase.from('profiles').update(profileForm).eq('id', user.id);
+      await profilesApi.update(user.id, profileForm);
       showToast('Perfil atualizado!', 'success');
     } catch (err) { showToast('Erro: ' + err.message, 'error'); }
     finally { setProfSaving(false); }
@@ -294,7 +272,13 @@ export default function Driver() {
                     <span><i className="fa-solid fa-user" style={{color:'var(--red)'}} /> {activeDelivery.client?.name||'—'}</span>
                     <span><i className="fa-solid fa-phone" style={{color:'var(--red)'}} /> {activeDelivery.client?.phone||'—'}</span>
                   </div>
-                  <div style={{display:'flex',gap:'.7rem',flexWrap:'wrap'}}>
+                  <MapView
+                    mode="driver"
+                    origin={{ lat: -23.5505, lng: -46.6333, label: activeDelivery.store?.name || 'Loja' }}
+                    destination={{ lat: -23.5610, lng: -46.6560, label: `${activeDelivery.address?.street || ''}, ${activeDelivery.address?.city || ''}` }}
+                    eta="~25 min"
+                  />
+                  <div style={{display:'flex',gap:'.7rem',flexWrap:'wrap',marginTop:'1rem'}}>
                     {activeDelivery.status==='shipped'&&(
                       <button className="btn btn-primary" onClick={()=>updateDeliveryStatus(activeDelivery.id,'delivering')}>
                         <i className="fa-solid fa-box-open" /> Confirmar coleta
@@ -582,7 +566,7 @@ export default function Driver() {
           <div className="form-group"><label>Chave Pix</label><input placeholder="CPF, e-mail ou telefone" /></div>
           <button className="btn btn-primary btn-full" onClick={async()=>{
             try {
-              await supabase.from('drivers').update({ balance: 0 }).eq('id', user.id);
+              await driversApi.updateDriver(user.id, { balance: 0 });
               setDriverData(prev=>({...prev,balance:0}));
               setWithdrawModal(false);
               showToast('Saque solicitado! Chegará em até 2 dias úteis.','success');

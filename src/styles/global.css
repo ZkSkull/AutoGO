@@ -207,6 +207,14 @@ input,select,textarea{font-family:inherit;box-sizing:border-box}
 .page-header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem}
 .page-header-row h2{font-family:var(--font-head),sans-serif;font-size:1.8rem;font-weight:900;color:var(--gray-900)}
 
+/* PAGINATION */
+.pagination{display:flex;align-items:center;justify-content:center;gap:.4rem;margin-top:1.5rem}
+.pagination-btn{width:36px;height:36px;border-radius:var(--radius);border:2px solid var(--gray-200);background:#fff;color:var(--gray-700);font-weight:600;font-size:.88rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.pagination-btn:hover:not(:disabled){border-color:var(--red);color:var(--red)}
+.pagination-btn.active{background:var(--red);border-color:var(--red);color:#fff}
+.pagination-btn:disabled{opacity:.35;cursor:default}
+.pagination-dots{color:var(--gray-400);padding:0 .2rem;letter-spacing:.15em}
+
 /* ANIMATIONS */
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}

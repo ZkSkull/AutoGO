@@ -1,5 +1,13 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { profilesApi, favoritesApi, cartApi, geoApi } from '../lib/api';
+
+const CONN_TIMEOUT = 8000;
+const withTimeout = (promise, ms) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo de conexão esgotado')), ms)),
+  ]);
 
 const AppContext = createContext();
 
@@ -18,13 +26,7 @@ export function AppProvider({ children }) {
   // ── Carregar profile do banco ──────────────────────────────
   const loadProfile = async (userId) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) throw error;
+      const data = await profilesApi.get(userId);
       setProfile(data);
 
       // Carregar favoritos
@@ -43,20 +45,79 @@ export function AppProvider({ children }) {
     }
   };
 
+  // ── Sincronizar carrinho com o banco ───────────────────────
+  const loadCartFromDb = useCallback(async (userId) => {
+    try {
+      const rows = await cartApi.list(userId);
+      const dbCart = rows.map(r => ({
+        id: r.product_id,
+        qty: r.quantity,
+        storeId: null,
+      }));
+
+      // Merge: carrinho local (não logado) + carrinho do banco
+      const local = (() => {
+        try { return JSON.parse(localStorage.getItem('prcart') || '[]'); } catch { return []; }
+      })();
+      const localIds = new Set(local.map(i => i.id));
+      const merged = [
+        ...local,
+        ...dbCart.filter(i => !localIds.has(i.id)),
+      ];
+      if (merged.length) localStorage.setItem('prcart', JSON.stringify(merged));
+      setCart(merged);
+    } catch (err) {
+      // Tabela ainda não existe (migration não aplicada) — segue só com localStorage
+      if (err?.code !== '42P01') console.error('Erro ao sincronizar carrinho:', err?.message || err);
+    }
+  }, []);
+
+  // Salva carrinho no banco quando mudar (se logado)
+  const cartRef = useRef(cart);
+  cartRef.current = cart;
+  const userRef = useRef(user);
+  userRef.current = user;
+  useEffect(() => {
+    if (!userRef.current) return;
+    const c = cartRef.current;
+    const timer = setTimeout(async () => {
+      try {
+        await cartApi.replace(userRef.current.id, c);
+      } catch (err) {
+        if (err?.code !== '42P01') console.error('Erro ao salvar carrinho:', err?.message || err);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [cart]);
+
   // ── Verificar sessão ao iniciar ───────────────────────────
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        loadProfile(session.user.id);
-      }
-      setLoading(false);
-    });
+    let active = true;
+
+    withTimeout(supabase.auth.getSession(), CONN_TIMEOUT)
+      .then(({ data: { session } }) => {
+        if (!active) return;
+        if (session?.user) {
+          setUser(session.user);
+          loadProfile(session.user.id);
+          loadCartFromDb(session.user.id);
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Falha ao verificar sessão:', err?.message || err);
+        if (active) {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        }
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user);
         loadProfile(session.user.id);
+        loadCartFromDb(session.user.id);
       } else {
         setUser(null);
         setProfile(null);
@@ -66,7 +127,10 @@ export function AppProvider({ children }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // ── Login ─────────────────────────────────────────────────
@@ -91,31 +155,22 @@ export function AppProvider({ children }) {
     const userId = data.user?.id;
     if (!userId) return data;
 
-    // Upsert profile com todos os dados preenchidos
-    await supabase.from('profiles').upsert({
-      id:   userId,
-      name: finalName,
-      phone: phone || '',
-      cpf:   cpf   || '',
-      role,
+    // RLS-safe: o signup não tem sessão (e-mail de confirmação), então
+    // loja/entregador/perfil são criados via RPC SECURITY DEFINER.
+    const geo = await geoApi.geocode(address);
+    const { error: onboardError } = await supabase.rpc('finalize_onboarding', {
+      p_user_id: userId,
+      p_role: role,
+      p_store: role === 'merchant' ? {
+        name: storeName, cnpj: cnpj || '', phone: phone || '',
+        email, address: address || '',
+        lat: geo?.lat ?? '', lng: geo?.lng ?? '',
+      } : null,
+      p_driver: role === 'driver' ? { vehicle_type: vehicleType || 'moto' } : null,
+      p_phone: phone || '',
+      p_cpf: cpf || '',
     });
-
-    // Se comerciante, criar loja
-    if (role === 'merchant' && storeName) {
-      await supabase.from('stores').insert({
-        owner_id: userId,
-        name: storeName,
-        cnpj, address, email, phone,
-      });
-    }
-
-    // Se entregador, criar registro
-    if (role === 'driver') {
-      await supabase.from('drivers').insert({
-        id: userId,
-        vehicle_type: vehicleType || 'moto',
-      });
-    }
+    if (onboardError) throw onboardError;
 
     return data;
   }, []);
@@ -134,7 +189,13 @@ export function AppProvider({ children }) {
       const existing = prev.find(i => i.id === product.id);
       const next = existing
         ? prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i)
-        : [...prev, { id: product.id, qty: 1, price: product.price, name: product.name }];
+        : [...prev, {
+            id: product.id,
+            qty: 1,
+            price: product.price,
+            name: product.name,
+            storeId: product.storeId || product.store_id || null,
+          }];
       localStorage.setItem('prcart', JSON.stringify(next));
       return next;
     });
@@ -161,32 +222,29 @@ export function AppProvider({ children }) {
     setCart([]);
   }, []);
 
-  // ── Favoritos ─────────────────────────────────────────────
-  const toggleFav = useCallback(async (productId) => {
-    if (!user) { showToast('Faça login para favoritar.', 'info'); return; }
-    const isFav = favorites.includes(productId);
-    try {
-      if (isFav) {
-        await supabase.from('favorites').delete().eq('user_id', user.id).eq('product_id', productId);
-      } else {
-        await supabase.from('favorites').insert({ user_id: user.id, product_id: productId });
-      }
-      setFavorites(prev => {
-        const next = isFav ? prev.filter(id => id !== productId) : [...prev, productId];
-        localStorage.setItem('prfav', JSON.stringify(next));
-        return next;
-      });
-    } catch (err) {
-      console.error('Erro ao favoritar:', err.message);
-    }
-  }, [user, favorites]);
-
   // ── Toasts ────────────────────────────────────────────────
   const showToast = useCallback((msg, type = 'info') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, msg, type }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
   }, []);
+
+  // ── Favoritos ─────────────────────────────────────────────
+  const toggleFav = useCallback(async (productId) => {
+    if (!user) { showToast('Faça login para favoritar.', 'info'); return; }
+    try {
+      const added = await favoritesApi.toggle(user.id, productId);
+      setFavorites(prev => {
+        const next = added ? [...prev, productId] : prev.filter(id => id !== productId);
+        localStorage.setItem('prfav', JSON.stringify(next));
+        return next;
+      });
+      showToast(added ? 'Favoritado!' : 'Removido dos favoritos.', 'info');
+    } catch (err) {
+      console.error('Erro ao favoritar:', err.message);
+      showToast('Erro ao favoritar.', 'error');
+    }
+  }, [user, showToast]);
 
   const cartTotal = cart.reduce((s, i) => s + i.qty, 0);
 
@@ -203,4 +261,5 @@ export function AppProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useApp = () => useContext(AppContext);

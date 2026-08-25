@@ -13,9 +13,8 @@ export default function Lojas() {
   const [stores,    setStores]    = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [selected,  setSelected]  = useState(null);
-  const [search,    setSearch]    = useState('');
-  const [filterOpen,setFilterOpen]= useState(false);
-  const [onlyOpen,  setOnlyOpen]  = useState(false);
+  const [search,     setSearch]     = useState('');
+  const [onlyOpen,   setOnlyOpen]   = useState(false);
 
   // Detail panel state
   const [storeProducts, setStoreProducts] = useState([]);

@@ -9,17 +9,17 @@ import './Produto.css';
 const CONDITION_LABEL = { new: 'Novo', reman: 'Remanufaturado', used: 'Usado' };
 
 export default function Produto() {
-  const { id }     = useParams();
-  const navigate   = useNavigate();
+  const { id } = useParams();
+  const navigate = useNavigate();
   const { addToCart, toggleFav, favorites, showToast } = useApp();
 
-  const [product,    setProduct]    = useState(null);
-  const [related,    setRelated]    = useState([]);
-  const [reviews,    setReviews]    = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [notFound,   setNotFound]   = useState(false);
-  const [qty,        setQty]        = useState(1);
-  const [activeTab,  setActiveTab]  = useState('descricao');
+  const [product, setProduct] = useState(null);
+  const [related, setRelated] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [qty, setQty] = useState(1);
+  const [activeTab, setActiveTab] = useState('descricao');
 
   useEffect(() => {
     loadProduct();
@@ -43,9 +43,9 @@ export default function Produto() {
       // Normalizar campos
       const normalized = {
         ...data,
-        icon:   data.icon_emoji || '🔩',
+        icon: data.icon_emoji || '🔩',
         compat: data.compatibility || '',
-        badge:  data.badge || '',
+        badge: data.badge || '',
         storeId: data.store_id,
       };
       setProduct(normalized);
@@ -89,9 +89,9 @@ export default function Produto() {
   // ── Loading ───────────────────────────────────────────────
   if (loading) return (
     <PageLayout>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'60vh', flexDirection:'column', gap:'1rem' }}>
-        <i className="fa-solid fa-gear fa-spin" style={{ fontSize:'2.5rem', color:'var(--red)' }} />
-        <p style={{ color:'var(--gray-400)' }}>Carregando produto...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', flexDirection: 'column', gap: '1rem' }}>
+        <i className="fa-solid fa-gear fa-spin" style={{ fontSize: '2.5rem', color: 'var(--red)' }} />
+        <p style={{ color: 'var(--gray-400)' }}>Carregando produto...</p>
       </div>
     </PageLayout>
   );
@@ -99,16 +99,16 @@ export default function Produto() {
   // ── Not found ─────────────────────────────────────────────
   if (notFound || !product) return (
     <PageLayout>
-      <div className="container" style={{ padding:'5rem 1.5rem', textAlign:'center' }}>
-        <i className="fa-solid fa-circle-exclamation" style={{ fontSize:'3rem', color:'var(--red)', display:'block', marginBottom:'1rem' }} />
-        <h2 style={{ fontFamily:'var(--font-head)', fontSize:'2rem', fontWeight:900, marginBottom:'1rem' }}>Produto não encontrado</h2>
+      <div className="container" style={{ padding: '5rem 1.5rem', textAlign: 'center' }}>
+        <i className="fa-solid fa-circle-exclamation" style={{ fontSize: '3rem', color: 'var(--red)', display: 'block', marginBottom: '1rem' }} />
+        <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '2rem', fontWeight: 900, marginBottom: '1rem' }}>Produto não encontrado</h2>
         <button className="btn btn-primary" onClick={() => navigate('/client')}>Voltar à loja</button>
       </div>
     </PageLayout>
   );
 
-  const store    = product.store;
-  const avgRating = reviews.length ? (reviews.reduce((s,r) => s+r.rating, 0) / reviews.length).toFixed(1) : (product.rating || 5).toFixed(1);
+  const store = product.store;
+  const avgRating = reviews.length ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : (product.rating || 5).toFixed(1);
 
   return (
     <PageLayout>
@@ -133,7 +133,7 @@ export default function Produto() {
             <div className="produto-image-col">
               <div className="produto-img-main">
                 {product.images?.length > 0 ? (
-                  <img src={product.images[0]} alt={product.name} style={{ width:'100%', height:'100%', objectFit:'contain' }} />
+                  <img src={product.images[0]} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 ) : (
                   <span className="produto-img-emoji">{product.icon}</span>
                 )}
@@ -144,13 +144,13 @@ export default function Produto() {
                 <div className="produto-img-thumbs">
                   {product.images.slice(0, 3).map((img, i) => (
                     <div key={i} className={`produto-thumb${i === 0 ? ' active' : ''}`}>
-                      <img src={img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                      <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="produto-img-thumbs">
-                  {[0,1,2].map(i => (
+                  {[0, 1, 2].map(i => (
                     <div key={i} className={`produto-thumb${i === 0 ? ' active' : ''}`}>{product.icon}</div>
                   ))}
                 </div>
@@ -168,7 +168,7 @@ export default function Produto() {
 
               <div className="produto-rating-row">
                 <div className="produto-stars">
-                  {[1,2,3,4,5].map(s => (
+                  {[1, 2, 3, 4, 5].map(s => (
                     <i key={s} className={`fa-${s <= Math.round(Number(avgRating)) ? 'solid' : 'regular'} fa-star`} />
                   ))}
                 </div>
@@ -186,7 +186,7 @@ export default function Produto() {
 
               <div className="produto-stock">
                 <i className={`fa-solid fa-${product.stock > 0 ? 'circle-check' : 'circle-xmark'}`}
-                   style={{ color: product.stock > 0 ? 'var(--green)' : 'var(--red)' }} />
+                  style={{ color: product.stock > 0 ? 'var(--green)' : 'var(--red)' }} />
                 <span>{product.stock > 0 ? `${product.stock} em estoque` : 'Fora de estoque'}</span>
               </div>
 
@@ -199,11 +199,11 @@ export default function Produto() {
               <div className="produto-actions-block">
                 <div className="produto-qty-row">
                   <button className="qty-btn" onClick={() => setQty(q => Math.max(1, q - 1))}>
-                    <i className="fa-solid fa-minus" style={{ fontSize:'.75rem' }} />
+                    <i className="fa-solid fa-minus" style={{ fontSize: '.75rem' }} />
                   </button>
                   <span className="qty-val">{qty}</span>
                   <button className="qty-btn" onClick={() => setQty(q => Math.min(product.stock, q + 1))}>
-                    <i className="fa-solid fa-plus" style={{ fontSize:'.75rem' }} />
+                    <i className="fa-solid fa-plus" style={{ fontSize: '.75rem' }} />
                   </button>
                 </div>
                 <button className="btn btn-primary produto-buy-btn" onClick={handleAddCart} disabled={product.stock === 0}>
@@ -214,16 +214,17 @@ export default function Produto() {
                 </button>
               </div>
 
-              <button className="btn btn-dark btn-full" style={{ marginTop:'.5rem' }} onClick={() => { handleAddCart(); navigate('/client'); }}>
+              <button className="btn btn-primary btn-full" style={{ marginTop: '.5rem' }}
+                onClick={() => { handleAddCart(); navigate('/client?page=cart'); }}>
                 <i className="fa-solid fa-bolt" /> Comprar agora
               </button>
 
               {/* Delivery */}
               <div className="produto-delivery-card">
                 {[
-                  ['fa-bolt','var(--red)','Entrega Expressa','Receba em até 45 minutos · R$ 8,90'],
-                  ['fa-truck','var(--gray-500)','Entrega Padrão','Receba em 2–4h · Grátis acima de R$ 100'],
-                  ['fa-store','var(--gray-500)','Retirar na Loja','Pronto em 30 min · Grátis'],
+                  ['fa-bolt', 'var(--red)', 'Entrega Expressa', 'Receba em até 45 minutos · R$ 8,90'],
+                  ['fa-truck', 'var(--gray-500)', 'Entrega Padrão', 'Receba em 2–4h · Grátis acima de R$ 100'],
+                  ['fa-store', 'var(--gray-500)', 'Retirar na Loja', 'Pronto em 30 min · Grátis'],
                 ].map(([icon, color, title, sub]) => (
                   <div key={title} className="delivery-option">
                     <i className={`fa-solid ${icon}`} style={{ color }} />
@@ -239,7 +240,7 @@ export default function Produto() {
                   <div className="store-badge-info">
                     <strong>{store.name}</strong>
                     <span>
-                      <i className="fa-solid fa-star" style={{ color:'#F5A623' }} /> {store.rating || 5}
+                      <i className="fa-solid fa-star" style={{ color: '#F5A623' }} /> {store.rating || 5}
                       {store.address && ` · ${store.address}`}
                       {' · '}
                       <span style={{ color: store.is_open ? 'var(--green)' : 'var(--red)' }}>
@@ -247,7 +248,7 @@ export default function Produto() {
                       </span>
                     </span>
                   </div>
-                  <i className="fa-solid fa-chevron-right" style={{ color:'var(--gray-400)', marginLeft:'auto' }} />
+                  <i className="fa-solid fa-chevron-right" style={{ color: 'var(--gray-400)', marginLeft: 'auto' }} />
                 </div>
               )}
             </div>
@@ -255,8 +256,8 @@ export default function Produto() {
 
           {/* TABS */}
           <div className="produto-tabs">
-            {[['descricao','Descrição'],['compat','Compatibilidade'],['avaliacoes','Avaliações']].map(([key, label]) => (
-              <button key={key} className={`produto-tab${activeTab===key?' active':''}`} onClick={() => setActiveTab(key)}>
+            {[['descricao', 'Descrição'], ['compat', 'Compatibilidade'], ['avaliacoes', 'Avaliações']].map(([key, label]) => (
+              <button key={key} className={`produto-tab${activeTab === key ? ' active' : ''}`} onClick={() => setActiveTab(key)}>
                 {label}
               </button>
             ))}
@@ -264,17 +265,17 @@ export default function Produto() {
 
           <div className="produto-tab-content">
             {/* Descrição */}
-            {activeTab==='descricao' && (
+            {activeTab === 'descricao' && (
               <div className="tab-descricao">
                 <h3>Sobre o produto</h3>
                 <p>{product.description || `O ${product.name} da marca ${product.brand} é uma peça de alta qualidade, desenvolvida para oferecer máxima durabilidade e desempenho.`}</p>
                 <div className="tab-specs-grid">
                   {[
-                    ['Marca',     product.brand],
+                    ['Marca', product.brand],
                     product.code && ['Código', product.code],
                     ['Categoria', product.category],
-                    ['Condição',  CONDITION_LABEL[product.condition] || 'Novo'],
-                    ['Estoque',   `${product.stock} unidades`],
+                    ['Condição', CONDITION_LABEL[product.condition] || 'Novo'],
+                    ['Estoque', `${product.stock} unidades`],
                     ['Avaliação', `${avgRating} / 5`],
                   ].filter(Boolean).map(([k, v]) => (
                     <div key={k} className="spec-row">
@@ -287,42 +288,42 @@ export default function Produto() {
             )}
 
             {/* Compatibilidade */}
-            {activeTab==='compat' && (
+            {activeTab === 'compat' && (
               <div className="tab-compat">
                 <h3>Veículos compatíveis</h3>
                 {product.compat ? (
                   <div className="compat-list">
                     {product.compat.split(',').map(c => (
                       <div key={c} className="compat-item">
-                        <i className="fa-solid fa-car" style={{ color:'var(--red)' }} />
+                        <i className="fa-solid fa-car" style={{ color: 'var(--red)' }} />
                         <span>{c.trim()}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p style={{ color:'var(--gray-400)' }}>Consulte a compatibilidade com o vendedor.</p>
+                  <p style={{ color: 'var(--gray-400)' }}>Consulte a compatibilidade com o vendedor.</p>
                 )}
               </div>
             )}
 
             {/* Avaliações */}
-            {activeTab==='avaliacoes' && (
+            {activeTab === 'avaliacoes' && (
               <div className="tab-reviews">
                 <div className="reviews-summary-row">
                   <div className="big-rating-block">
                     <span className="big-rating-val">{avgRating}</span>
-                    <div className="big-rating-stars" style={{ color:'#F5A623' }}>{'★'.repeat(Math.round(Number(avgRating)))}</div>
-                    <span style={{ fontSize:'.85rem', color:'var(--gray-400)' }}>{reviews.length} avaliações</span>
+                    <div className="big-rating-stars" style={{ color: '#F5A623' }}>{'★'.repeat(Math.round(Number(avgRating)))}</div>
+                    <span style={{ fontSize: '.85rem', color: 'var(--gray-400)' }}>{reviews.length} avaliações</span>
                   </div>
-                  <div className="review-bars" style={{ flex:1 }}>
-                    {[5,4,3,2,1].map(star => {
+                  <div className="review-bars" style={{ flex: 1 }}>
+                    {[5, 4, 3, 2, 1].map(star => {
                       const count = reviews.filter(r => r.rating === star).length;
-                      const pct   = reviews.length ? Math.round(count/reviews.length*100) : 0;
+                      const pct = reviews.length ? Math.round(count / reviews.length * 100) : 0;
                       return (
-                        <div key={star} style={{ display:'flex', alignItems:'center', gap:'.8rem', fontSize:'.84rem', color:'var(--gray-500)' }}>
+                        <div key={star} style={{ display: 'flex', alignItems: 'center', gap: '.8rem', fontSize: '.84rem', color: 'var(--gray-500)' }}>
                           <span>{star} ★</span>
-                          <div style={{ flex:1, height:8, background:'var(--gray-200)', borderRadius:4, overflow:'hidden' }}>
-                            <div style={{ width:pct+'%', height:'100%', background:'#F5A623', borderRadius:4 }} />
+                          <div style={{ flex: 1, height: 8, background: 'var(--gray-200)', borderRadius: 4, overflow: 'hidden' }}>
+                            <div style={{ width: pct + '%', height: '100%', background: '#F5A623', borderRadius: 4 }} />
                           </div>
                           <span>{pct}%</span>
                         </div>
@@ -331,27 +332,27 @@ export default function Produto() {
                   </div>
                 </div>
                 {reviews.length === 0 ? (
-                  <div className="empty-state" style={{ padding:'1.5rem 0' }}>
+                  <div className="empty-state" style={{ padding: '1.5rem 0' }}>
                     <i className="fa-solid fa-star" />
                     <p>Nenhuma avaliação ainda.</p>
                   </div>
                 ) : (
-                  <div style={{ display:'flex', flexDirection:'column', gap:'.9rem', marginTop:'1.5rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '.9rem', marginTop: '1.5rem' }}>
                     {reviews.map(r => (
-                      <div key={r.id} style={{ background:'var(--gray-100)', borderRadius:'var(--radius-lg)', padding:'1.1rem 1.2rem' }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:'.8rem', marginBottom:'.7rem' }}>
-                          <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--gray-800)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.82rem', fontWeight:700 }}>
-                            {r.user?.name?.slice(0,2).toUpperCase() || '??'}
+                      <div key={r.id} style={{ background: 'var(--gray-100)', borderRadius: 'var(--radius-lg)', padding: '1.1rem 1.2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '.8rem', marginBottom: '.7rem' }}>
+                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--gray-800)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.82rem', fontWeight: 700 }}>
+                            {r.user?.name?.slice(0, 2).toUpperCase() || '??'}
                           </div>
                           <div>
-                            <div style={{ fontWeight:600, fontSize:'.9rem' }}>{r.user?.name || 'Anônimo'}</div>
-                            <div style={{ color:'#F5A623', fontSize:'.82rem' }}>{'★'.repeat(r.rating)}</div>
+                            <div style={{ fontWeight: 600, fontSize: '.9rem' }}>{r.user?.name || 'Anônimo'}</div>
+                            <div style={{ color: '#F5A623', fontSize: '.82rem' }}>{'★'.repeat(r.rating)}</div>
                           </div>
-                          <div style={{ marginLeft:'auto', fontSize:'.78rem', color:'var(--gray-400)' }}>
+                          <div style={{ marginLeft: 'auto', fontSize: '.78rem', color: 'var(--gray-400)' }}>
                             {new Date(r.created_at).toLocaleDateString('pt-BR')}
                           </div>
                         </div>
-                        {r.comment && <p style={{ fontSize:'.88rem', color:'var(--gray-600)' }}>{r.comment}</p>}
+                        {r.comment && <p style={{ fontSize: '.88rem', color: 'var(--gray-600)' }}>{r.comment}</p>}
                       </div>
                     ))}
                   </div>
@@ -367,12 +368,12 @@ export default function Produto() {
               <div className="products-grid">
                 {related.map(p => (
                   <div key={p.id} className="product-card light" onClick={() => navigate(`/produto/${p.id}`)}>
-                    <div className="product-img"><span>{p.icon}</span>{p.badge&&<span className="product-badge-tag">{p.badge}</span>}</div>
+                    <div className="product-img"><span>{p.icon}</span>{p.badge && <span className="product-badge-tag">{p.badge}</span>}</div>
                     <div className="product-body">
                       <div className="product-brand">{p.brand}</div>
                       <div className="product-name">{p.name}</div>
                       <div className="product-price">{fmt(p.price)}</div>
-                      <button className="btn btn-primary btn-full" style={{ marginTop:'.7rem', fontSize:'.86rem', padding:'.48rem' }}
+                      <button className="btn btn-primary btn-full" style={{ marginTop: '.7rem', fontSize: '.86rem', padding: '.48rem' }}
                         onClick={e => { e.stopPropagation(); addToCart(p); showToast(`${p.name} adicionado!`, 'success'); }}>
                         <i className="fa-solid fa-cart-plus" /> Adicionar
                       </button>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { STORES, STORE_PRICES, fmt } from '../data';
+import { productsApi } from '../lib/api';
+import { fmt } from '../data';
 import './PriceComparison.css';
 
 const HIGHLIGHT_LABELS = {
@@ -11,23 +12,59 @@ const HIGHLIGHT_LABELS = {
 
 export default function PriceComparison({ product, onClose }) {
   const { addToCart, showToast } = useApp();
-  const [sortBy, setSortBy] = useState('price'); // 'price' | 'rating' | 'delivery'
+  const [sortBy, setSortBy] = useState('price'); // 'price' | 'rating'
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const entries = STORE_PRICES[product.code] || [];
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError('');
+    productsApi.comparePrices(product.code)
+      .then(data => { if (active) setEntries(data || []); })
+      .catch(() => { if (active) setError('Não foi possível comparar preços.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [product.code]);
 
-  // Sort entries
-  const sorted = [...entries].sort((a, b) => {
-    if (sortBy === 'price')    return a.price - b.price;
-    if (sortBy === 'rating')   return b.rating - a.rating;
-    if (sortBy === 'delivery') return parseInt(a.deliveryTime) - parseInt(b.deliveryTime);
-    return 0;
-  });
+  // Normalizar para o formato exibido (usa a loja embutida na query)
+  const normalized = useMemo(() => entries.map(e => ({
+    storeId: e.store_id,
+    store: e.store || {},
+    price: e.price ?? 0,
+    stock: e.stock ?? 0,
+    rating: e.rating ?? 0,
+    condition: e.condition,
+    highlight: e.badge || '',
+  })), [entries]);
 
-  const minPrice = Math.min(...entries.map(e => e.price));
-  const maxPrice = Math.max(...entries.map(e => e.price));
-  const savings  = maxPrice - minPrice;
+  const sorted = useMemo(() => {
+    const list = [...normalized];
+    if (sortBy === 'price') list.sort((a, b) => a.price - b.price);
+    if (sortBy === 'rating') list.sort((a, b) => b.rating - a.rating);
+    return list;
+  }, [normalized, sortBy]);
 
-  if (entries.length === 0) {
+  if (loading) {
+    return (
+      <div className="price-comp-empty">
+        <i className="fa-solid fa-spinner fa-spin" />
+        <p>Comparando preços entre lojas...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="price-comp-empty">
+        <i className="fa-solid fa-triangle-exclamation" />
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  if (sorted.length === 0) {
     return (
       <div className="price-comp-empty">
         <i className="fa-solid fa-store-slash" />
@@ -36,12 +73,17 @@ export default function PriceComparison({ product, onClose }) {
     );
   }
 
+  const prices = normalized.map(e => e.price);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const savings = maxPrice - minPrice;
+
   return (
     <div className="price-comp-wrap">
       {/* Header */}
       <div className="price-comp-header">
         <div className="price-comp-product-info">
-          <span className="price-comp-icon">{product.icon}</span>
+          <span className="price-comp-icon">{product.icon || '🔩'}</span>
           <div>
             <div className="price-comp-product-name">{product.name}</div>
             <div className="price-comp-product-meta">{product.brand} · {product.code}</div>
@@ -50,7 +92,7 @@ export default function PriceComparison({ product, onClose }) {
         {savings > 0 && (
           <div className="price-comp-savings-badge">
             <i className="fa-solid fa-piggy-bank" />
-            Economize até {fmt(savings) } comparando lojas
+            Economize até {fmt(savings)} comparando lojas
           </div>
         )}
       </div>
@@ -61,7 +103,6 @@ export default function PriceComparison({ product, onClose }) {
         {[
           { val: 'price',    label: 'Menor preço',  icon: 'fa-tag'           },
           { val: 'rating',   label: 'Avaliação',    icon: 'fa-star'          },
-          { val: 'delivery', label: 'Mais rápido',  icon: 'fa-truck-fast'    },
         ].map(t => (
           <button
             key={t.val}
@@ -74,38 +115,37 @@ export default function PriceComparison({ product, onClose }) {
       </div>
 
       {/* Price bar (visual comparison) */}
-      <div className="price-comp-bar-section">
-        <div className="price-comp-bar-labels">
-          <span>{fmt(minPrice)}</span>
-          <span style={{ fontSize: '.78rem', color: 'var(--gray-400)' }}>faixa de preço nesta semana</span>
-          <span>{fmt(maxPrice)}</span>
+      {maxPrice > minPrice && (
+        <div className="price-comp-bar-section">
+          <div className="price-comp-bar-labels">
+            <span>{fmt(minPrice)}</span>
+            <span style={{ fontSize: '.78rem', color: 'var(--gray-400)' }}>faixa de preço agora</span>
+            <span>{fmt(maxPrice)}</span>
+          </div>
+          <div className="price-comp-bar-track">
+            {sorted.map((e, i) => {
+              const pct = normalized.length > 1
+                ? ((e.price - minPrice) / (maxPrice - minPrice || 1)) * 80 + 10
+                : 50;
+              return (
+                <div
+                  key={i}
+                  className="price-comp-bar-dot"
+                  style={{ left: `${pct}%`, background: e.price === minPrice ? 'var(--green)' : 'var(--red)' }}
+                  title={`${e.store?.name}: ${fmt(e.price)}`}
+                />
+              );
+            })}
+          </div>
         </div>
-        <div className="price-comp-bar-track">
-          {sorted.map(e => {
-            const pct = entries.length > 1
-              ? ((e.price - minPrice) / (maxPrice - minPrice || 1)) * 80 + 10
-              : 50;
-            return (
-              <div
-                key={e.storeId}
-                className="price-comp-bar-dot"
-                style={{ left: `${pct}%`, background: e.price === minPrice ? 'var(--green)' : 'var(--red)' }}
-                title={`${STORES.find(s => s.id === e.storeId)?.name}: ${fmt(e.price)}`}
-              />
-            );
-          })}
-        </div>
-      </div>
+      )}
 
       {/* Store rows */}
       <div className="price-comp-list">
         {sorted.map((entry, idx) => {
-          const store     = STORES.find(s => s.id === entry.storeId);
-          if (!store) return null;
-          const isLowest  = entry.price === minPrice;
-          const isBest    = entry.rating === Math.max(...entries.map(e => e.rating));
-          const isFastest = entry.deliveryTime === entries.reduce((a,b) => parseInt(a.deliveryTime) < parseInt(b.deliveryTime) ? a : b).deliveryTime;
-          const hl        = HIGHLIGHT_LABELS[entry.highlight];
+          const store = entry.store;
+          const isLowest = entry.price === minPrice;
+          const hl = HIGHLIGHT_LABELS[entry.highlight.toLowerCase()];
 
           return (
             <div
@@ -114,7 +154,7 @@ export default function PriceComparison({ product, onClose }) {
             >
               {/* Rank */}
               <div className="price-comp-rank">
-                {idx === 0 && <i className="fa-solid fa-trophy" style={{ color: idx === 0 ? '#D97706' : 'var(--gray-300)' }} />}
+                {idx === 0 && <i className="fa-solid fa-trophy" style={{ color: '#D97706' }} />}
                 {idx > 0 && <span style={{ color: 'var(--gray-400)', fontSize: '.85rem' }}>{idx + 1}º</span>}
               </div>
 
@@ -125,7 +165,7 @@ export default function PriceComparison({ product, onClose }) {
                 </div>
                 <div>
                   <div className="price-comp-store-name">
-                    {store.name}
+                    {store?.name || 'Loja'}
                     {hl && (
                       <span className="price-comp-highlight-tag" style={{ color: hl.color, background: hl.color + '18', borderColor: hl.color + '40' }}>
                         <i className={`fa-solid ${hl.icon}`} /> {hl.label}
@@ -134,25 +174,21 @@ export default function PriceComparison({ product, onClose }) {
                   </div>
                   <div className="price-comp-store-meta">
                     <span>
-                      <i className="fa-solid fa-star" style={{ color: '#F5A623' }} /> {entry.rating}
+                      <i className="fa-solid fa-star" style={{ color: '#F5A623' }} /> {entry.rating || '—'}
                     </span>
-                    <span>
-                      <i className="fa-solid fa-location-dot" /> {store.distance}
-                    </span>
-                    <span style={{ color: store.open ? 'var(--green)' : 'var(--red)' }}>
-                      <i className="fa-solid fa-circle" style={{ fontSize: '.45rem' }} /> {store.open ? 'Aberta' : 'Fechada'}
+                    {store?.address && (
+                      <span>
+                        <i className="fa-solid fa-location-dot" /> {store.address.split(',')[0]}
+                      </span>
+                    )}
+                    <span style={{ color: store?.is_open ? 'var(--green)' : 'var(--red)' }}>
+                      <i className="fa-solid fa-circle" style={{ fontSize: '.45rem' }} /> {store?.is_open ? 'Aberta' : 'Fechada'}
                     </span>
                     <span>
                       <i className="fa-solid fa-box" /> {entry.stock} un.
                     </span>
                   </div>
                 </div>
-              </div>
-
-              {/* Delivery */}
-              <div className="price-comp-delivery">
-                <i className="fa-solid fa-truck-fast" style={{ color: 'var(--red)' }} />
-                <span>{entry.deliveryTime}</span>
               </div>
 
               {/* Price */}
@@ -174,15 +210,14 @@ export default function PriceComparison({ product, onClose }) {
               {/* Action */}
               <button
                 className={`btn price-comp-buy-btn${isLowest ? ' btn-primary' : ' btn-outline'}`}
-                disabled={entry.stock === 0 || !store.open}
+                disabled={entry.stock === 0 || !store?.is_open}
                 onClick={() => {
-                  // Add to cart the specific store's version of this product
                   addToCart({ ...product, price: entry.price, storeId: entry.storeId });
-                  showToast(`Adicionado de ${store.name} por ${fmt(entry.price)}!`, 'success');
+                  showToast(`Adicionado de ${store?.name} por ${fmt(entry.price)}!`, 'success');
                   onClose?.();
                 }}
               >
-                {entry.stock === 0 || !store.open
+                {entry.stock === 0 || !store?.is_open
                   ? <><i className="fa-solid fa-ban" /> Indisponível</>
                   : <><i className="fa-solid fa-cart-plus" /> Comprar</>
                 }
