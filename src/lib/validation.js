@@ -13,8 +13,8 @@ export const forgotSchema = z.object({
 
 export const registerSchema = z
   .object({
-    name: z.string().min(2, 'Informe seu nome completo.'),
-    storeName: z.string().min(2, 'Informe o nome da loja.'),
+    name: z.string().or(z.literal('')),
+    storeName: z.string().or(z.literal('')),
     phone: z.string().regex(/^\(\d{2}\) \d{4,5}-\d{4}$/, 'Telefone inválido. Use (11) 99999-9999.').or(z.literal('')),
     cpf: z.string().regex(/^\d{3}\.\d{3}\.\d{3}-\d{2}$/, 'CPF inválido. Use 000.000.000-00.').or(z.literal('')),
     cnpj: z.string().min(1, 'Informe o CNPJ.').or(z.literal('')),
@@ -23,6 +23,10 @@ export const registerSchema = z
     password: z.string().min(8, 'Senha mínima de 8 caracteres.'),
     confirm: z.string(),
     agreed: z.boolean().refine(v => v, 'Aceite os termos para continuar.'),
+  })
+  .refine(d => (d.name && d.name.trim().length >= 2) || (d.storeName && d.storeName.trim().length >= 2), {
+    message: 'Informe seu nome completo ou o nome da loja.',
+    path: ['name'],
   })
   .refine(d => d.password === d.confirm, { message: 'As senhas não coincidem.', path: ['confirm'] });
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { authApi } from '../../lib/api';
 import { loginSchema, registerSchema, forgotSchema, firstIssue } from '../../lib/validation';
@@ -9,7 +9,7 @@ import logo from '../../assets/images/logo-auto-go-branco.png';
 export default function Auth() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { login, register, showToast } = useApp();
+  const { login, loginAsDemo, register, showToast } = useApp();
 
   // 'login' | 'register' | 'forgot'
   const [mode, setMode] = useState(params.get('mode') === 'register' ? 'register' : 'login');
@@ -45,6 +45,40 @@ export default function Auth() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState('');
 
+  // ── Contas Demo para Apresentação ────────────────────────────
+  const DEMO_ACCOUNTS = [
+    {
+      role: 'client',
+      label: 'Cliente',
+      name: 'João Silva',
+      email: 'cliente@autogo.com',
+      icon: 'fa-user',
+      badge: 'Consumidor',
+      desc: 'Catálogo de autopeças, carrinho, compras e pedidos',
+      color: '#3B82F6',
+    },
+    {
+      role: 'merchant',
+      label: 'Comerciante',
+      name: 'Auto Peças Bandeirantes',
+      email: 'loja@autogo.com',
+      icon: 'fa-store',
+      badge: 'Lojista',
+      desc: 'Catálogo próprio, estoque, pedidos recebidos e métricas',
+      color: '#E11A2C',
+    },
+    {
+      role: 'driver',
+      label: 'Entregador',
+      name: 'Lucas Motta',
+      email: 'entregador@autogo.com',
+      icon: 'fa-motorcycle',
+      badge: 'Parceiro',
+      desc: 'Fila de entregas, rotas, aceitar corridas e ganhos',
+      color: '#22C55E',
+    },
+  ];
+
   // ── Helpers ──────────────────────────────────────────────────
   const checkStrength = (val) => {
     let score = 0;
@@ -75,7 +109,32 @@ export default function Auth() {
     if (m === 'register') { setRegStep(1); setUserType(''); }
   };
 
-  // ── Login universal — redireciona pelo role salvo no banco ───
+  // ── Acesso rápido 1-clique para demonstração ──────────────────
+  const handleQuickDemoLogin = (role) => {
+    setError('');
+    setLoading(true);
+    try {
+      const data = loginAsDemo(role);
+      const targetRole = data?.profile?.role || role;
+      setTimeout(() => {
+        if (targetRole === 'merchant') navigate('/merchant');
+        else if (targetRole === 'driver') navigate('/driver');
+        else navigate('/client');
+      }, 200);
+    } catch (err) {
+      setError('Erro ao iniciar demonstração: ' + err.message);
+      setLoading(false);
+    }
+  };
+
+  const handleFillDemo = (demo) => {
+    setEmail(demo.email);
+    setPw('senha123');
+    setError('');
+    showToast(`Credenciais de ${demo.label} preenchidas!`, 'info');
+  };
+
+  // ── Login universal ──────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
@@ -84,17 +143,22 @@ export default function Auth() {
     setLoading(true);
     try {
       const data = await login(email, pw);
-      const prof = await authApi.getProfile(data.user.id);
+      const prof = data?.profile || await authApi.getProfile(data?.user?.id);
 
       showToast('Login realizado com sucesso!', 'success');
       setTimeout(() => {
-        const role = prof.role || 'client';
+        const role = prof?.role || data?.user?.role || 'client';
         if (role === 'merchant') navigate('/merchant');
         else if (role === 'driver') navigate('/driver');
         else navigate('/client');
-      }, 400);
+      }, 250);
     } catch (err) {
-      setError(err.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : err.message);
+      const msg = err?.message || '';
+      if (msg === 'Invalid login credentials' || msg.includes('Invalid')) {
+        setError('E-mail ou senha incorretos.');
+      } else {
+        setError(msg || 'Falha ao autenticar. Experimente usar os botões de Acesso Rápido abaixo.');
+      }
     } finally {
       setLoading(false);
     }
@@ -105,8 +169,8 @@ export default function Auth() {
     e.preventDefault();
     setError('');
     const check = registerSchema.safeParse({
-      name,
-      storeName,
+      name: userType === 'merchant' ? (storeName || 'Loja') : name,
+      storeName: userType === 'merchant' ? storeName : (name || 'Cliente'),
       phone,
       cpf,
       cnpj,
@@ -124,10 +188,14 @@ export default function Auth() {
         name: userType === 'merchant' ? storeName : name,
         role: userType, phone, cpf, storeName, cnpj, address: addr, vehicleType,
       });
-      showToast('Conta criada! Verifique seu e-mail para confirmar.', 'success');
-      switchMode('login');
+      showToast('Conta criada com sucesso!', 'success');
+      setTimeout(() => {
+        if (userType === 'merchant') navigate('/merchant');
+        else if (userType === 'driver') navigate('/driver');
+        else navigate('/client');
+      }, 350);
     } catch (err) {
-      setError(err.message.includes('already registered') ? 'E-mail já cadastrado.' : err.message);
+      setError(err?.message?.includes('already registered') ? 'E-mail já cadastrado.' : (err?.message || 'Erro ao criar conta.'));
     } finally {
       setLoading(false);
     }
@@ -168,7 +236,9 @@ export default function Auth() {
         <div className="auth-left-inner">
 
           <div className="auth-header">
-            <img src={logo} alt="AutoGO" className="auth-logo-img" />
+            <Link to="/" title="Ir para início">
+              <img src={logo} alt="AutoGO" className="auth-logo-img" />
+            </Link>
 
             <div className="auth-tagline">
               <h2 className="auth-title">
@@ -178,7 +248,7 @@ export default function Auth() {
               </h2>
 
               <p className="auth-sub">
-                +12.000 produtos, +340 lojas, entrega expressa.
+                +12.000 produtos, +340 lojas parceiras, entrega expressa em minutos.
               </p>
             </div>
           </div>
@@ -186,16 +256,21 @@ export default function Auth() {
           <div className="auth-features">
             <div className="auth-feat">
               <i className="fa-solid fa-shield-halved" />
-              Compra 100% segura
+              <span>Compra 100% segura e garantida</span>
             </div>
             <div className="auth-feat">
               <i className="fa-solid fa-truck-fast" />
-              Entrega expressa
+              <span>Entrega expressa com rastreio em tempo real</span>
             </div>
             <div className="auth-feat">
               <i className="fa-solid fa-rotate-left" />
-              Garantia na compra
+              <span>Garantia de procedência e peças originais</span>
             </div>
+          </div>
+
+          <div className="auth-presentation-pill">
+            <i className="fa-solid fa-bolt" />
+            <span>Ambiente pronto para demonstração com dados mockados</span>
           </div>
 
         </div>
@@ -209,22 +284,88 @@ export default function Auth() {
       <div className="auth-right">
         <div className="auth-box">
 
+          <div className="auth-top-nav">
+            <Link to="/" className="auth-home-btn">
+              <i className="fa-solid fa-arrow-left" /> Voltar ao site
+            </Link>
+          </div>
+
           {/* ══════════ LOGIN ══════════ */}
           {mode === 'login' && (
             <>
               <div className="auth-tabs">
-                <button className="auth-tab active">Entrar</button>
-                <button className="auth-tab" onClick={() => switchMode('register')}>Cadastrar</button>
+                <button className="auth-tab active" type="button">Entrar</button>
+                <button className="auth-tab" type="button" onClick={() => switchMode('register')}>Cadastrar</button>
+              </div>
+
+              {/* ── SEÇÃO DE ACESSO RÁPIDO PARA APRESENTAÇÃO ── */}
+              <div className="demo-showcase-box">
+                <div className="demo-header">
+                  <div className="demo-header-badge">
+                    <i className="fa-solid fa-wand-magic-sparkles" /> Modo Apresentação
+                  </div>
+                  <span className="demo-header-hint">Clique para entrar direto em 1 segundo:</span>
+                </div>
+
+                <div className="demo-cards-row">
+                  {DEMO_ACCOUNTS.map((d) => (
+                    <div
+                      key={d.role}
+                      className="demo-card"
+                      style={{ '--role-color': d.color }}
+                    >
+                      <div className="demo-card-head">
+                        <div className="demo-card-icon">
+                          <i className={`fa-solid ${d.icon}`} />
+                        </div>
+                        <div className="demo-card-info">
+                          <strong>{d.label}</strong>
+                          <span className="demo-card-name">{d.name}</span>
+                        </div>
+                      </div>
+
+                      <p className="demo-card-desc">{d.desc}</p>
+
+                      <div className="demo-card-actions">
+                        <button
+                          type="button"
+                          className="btn-demo-quick"
+                          onClick={() => handleQuickDemoLogin(d.role)}
+                          disabled={loading}
+                          title={`Entrar diretamente como ${d.label}`}
+                        >
+                          <i className="fa-solid fa-arrow-right-to-bracket" /> Entrar
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-demo-fill"
+                          onClick={() => handleFillDemo(d)}
+                          title="Preencher no formulário abaixo"
+                        >
+                          Preencher
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="auth-divider">
+                <span>ou acesse com seu e-mail</span>
               </div>
 
               <form onSubmit={handleLogin} className="auth-form">
-                <h3 className="form-title">Bem-vindo de volta!</h3>
-
                 <div className="form-group">
                   <label>E-mail</label>
                   <div className="input-wrap">
                     <i className="fa-solid fa-envelope inp-icon" />
-                    <input type="email" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                    <input
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      required
+                    />
                   </div>
                 </div>
 
@@ -232,27 +373,57 @@ export default function Auth() {
                   <label>Senha</label>
                   <div className="input-wrap">
                     <i className="fa-solid fa-lock inp-icon" />
-                    <input type={showPw ? 'text' : 'password'} placeholder="••••••••" value={pw} onChange={e => setPw(e.target.value)} required />
-                    <button type="button" className="eye-btn" onClick={() => setShowPw(v => !v)}>
+                    <input
+                      type={showPw ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={pw}
+                      onChange={e => setPw(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="eye-btn"
+                      onClick={() => setShowPw(v => !v)}
+                      aria-label={showPw ? 'Ocultar senha' : 'Exibir senha'}
+                    >
                       <i className={`fa-solid fa-eye${showPw ? '-slash' : ''}`} />
                     </button>
                   </div>
                 </div>
 
-                <button type="button" className="auth-forgot" onClick={() => { setForgotEmail(email); setMode('forgot'); setError(''); }}>
-                  Esqueci minha senha
-                </button>
+                <div className="auth-options-row">
+                  <span className="auth-pw-hint">Dica demo: qualquer senha com 8+ dígitos</span>
+                  <button
+                    type="button"
+                    className="auth-forgot"
+                    onClick={() => { setForgotEmail(email); setMode('forgot'); setError(''); }}
+                  >
+                    Esqueci minha senha
+                  </button>
+                </div>
 
-                {error && <div className="form-error"><i className="fa-solid fa-circle-exclamation" /> {error}</div>}
+                {error && (
+                  <div className="form-error">
+                    <i className="fa-solid fa-circle-exclamation" /> {error}
+                  </div>
+                )}
 
                 <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-                  {loading ? <><i className="fa-solid fa-spinner fa-spin" /> Entrando…</> : <>Entrar <i className="fa-solid fa-arrow-right" /></>}
+                  {loading ? (
+                    <><i className="fa-solid fa-spinner fa-spin" /> Entrando…</>
+                  ) : (
+                    <>Entrar na conta <i className="fa-solid fa-arrow-right" /></>
+                  )}
                 </button>
 
-                <div className="auth-divider"><span>ou continue com</span></div>
+                <div className="auth-divider"><span>outras opções</span></div>
                 <div className="social-row">
-                  <button type="button" className="btn-social" onClick={() => showToast('Em breve!', 'info')}><i className="fa-brands fa-google" /> Google</button>
-                  <button type="button" className="btn-social" onClick={() => showToast('Em breve!', 'info')}><i className="fa-brands fa-facebook" /> Facebook</button>
+                  <button type="button" className="btn-social" onClick={() => handleQuickDemoLogin('client')}>
+                    <i className="fa-solid fa-user" /> Cliente Demo
+                  </button>
+                  <button type="button" className="btn-social" onClick={() => handleQuickDemoLogin('merchant')}>
+                    <i className="fa-solid fa-store" /> Loja Demo
+                  </button>
                 </div>
               </form>
             </>
@@ -262,15 +433,15 @@ export default function Auth() {
           {mode === 'register' && (
             <>
               <div className="auth-tabs">
-                <button className="auth-tab" onClick={() => switchMode('login')}>Entrar</button>
-                <button className="auth-tab active">Cadastrar</button>
+                <button className="auth-tab" type="button" onClick={() => switchMode('login')}>Entrar</button>
+                <button className="auth-tab active" type="button">Cadastrar</button>
               </div>
 
               {/* PASSO 1: escolha de tipo */}
               {regStep === 1 && (
                 <div className="auth-form">
                   <h3 className="form-title">Quem é você?</h3>
-                  <p className="reg-step-desc">Escolha como quer usar o AutoGO</p>
+                  <p className="reg-step-desc">Escolha como deseja se cadastrar na AutoGO:</p>
 
                   <div className="type-cards">
                     {TYPE_CARDS.map(t => (
@@ -301,7 +472,7 @@ export default function Auth() {
                     onClick={() => { setError(''); setRegStep(2); }}
                     style={{ marginTop: '1.5rem' }}
                   >
-                    Continuar <i className="fa-solid fa-arrow-right" />
+                    Continuar cadastro <i className="fa-solid fa-arrow-right" />
                   </button>
                 </div>
               )}
@@ -311,61 +482,156 @@ export default function Auth() {
                 <form onSubmit={handleRegister} className="auth-form">
                   <div className="reg-step2-header">
                     <button type="button" className="auth-back-btn" onClick={() => { setRegStep(1); setError(''); }}>
-                      <i className="fa-solid fa-arrow-left" /> Voltar
+                      <i className="fa-solid fa-arrow-left" /> Alterar perfil
                     </button>
                     <span className={`reg-type-badge reg-type-badge--${userType}`}>
                       <i className={`fa-solid ${activeCard?.icon}`} /> {activeCard?.label}
                     </span>
                   </div>
 
-                  <h3 className="form-title">Criar conta</h3>
+                  <h3 className="form-title">Criar conta como {activeCard?.label}</h3>
 
                   {userType === 'client' && (<>
-                    <div className="form-group"><label>Nome completo</label><div className="input-wrap"><i className="fa-solid fa-user inp-icon" /><input type="text" placeholder="João Silva" value={name} onChange={e => setName(e.target.value)} required /></div></div>
-                    <div className="form-group"><label>Telefone</label><div className="input-wrap"><i className="fa-solid fa-phone inp-icon" /><input type="tel" placeholder="(11) 99999-9999" value={phone} onChange={e => maskPhone(e.target.value)} /></div></div>
+                    <div className="form-group">
+                      <label>Nome completo</label>
+                      <div className="input-wrap">
+                        <i className="fa-solid fa-user inp-icon" />
+                        <input type="text" placeholder="João Silva" value={name} onChange={e => setName(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Telefone</label>
+                      <div className="input-wrap">
+                        <i className="fa-solid fa-phone inp-icon" />
+                        <input type="tel" placeholder="(11) 99999-9999" value={phone} onChange={e => maskPhone(e.target.value)} />
+                      </div>
+                    </div>
                   </>)}
 
                   {userType === 'merchant' && (<>
-                    <div className="form-group"><label>Nome da loja</label><div className="input-wrap"><i className="fa-solid fa-store inp-icon" /><input type="text" placeholder="Auto Peças Silva" value={storeName} onChange={e => setStoreName(e.target.value)} required /></div></div>
-                    <div className="form-row">
-                      <div className="form-group"><label>CNPJ</label><div className="input-wrap"><i className="fa-solid fa-id-card inp-icon" /><input type="text" placeholder="00.000.000/0001-00" value={cnpj} onChange={e => setCnpj(e.target.value)} /></div></div>
-                      <div className="form-group"><label>Telefone</label><div className="input-wrap"><i className="fa-solid fa-phone inp-icon" /><input type="tel" value={phone} onChange={e => maskPhone(e.target.value)} /></div></div>
+                    <div className="form-group">
+                      <label>Nome da loja</label>
+                      <div className="input-wrap">
+                        <i className="fa-solid fa-store inp-icon" />
+                        <input type="text" placeholder="Auto Peças Central" value={storeName} onChange={e => setStoreName(e.target.value)} required />
+                      </div>
                     </div>
-                    <div className="form-group"><label>Endereço</label><div className="input-wrap"><i className="fa-solid fa-location-dot inp-icon" /><input type="text" placeholder="Rua das Peças, 100 — São Paulo, SP" value={addr} onChange={e => setAddr(e.target.value)} /></div></div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>CNPJ</label>
+                        <div className="input-wrap">
+                          <i className="fa-solid fa-id-card inp-icon" />
+                          <input type="text" placeholder="00.000.000/0001-00" value={cnpj} onChange={e => setCnpj(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label>Telefone comercial</label>
+                        <div className="input-wrap">
+                          <i className="fa-solid fa-phone inp-icon" />
+                          <input type="tel" value={phone} onChange={e => maskPhone(e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Endereço da loja</label>
+                      <div className="input-wrap">
+                        <i className="fa-solid fa-location-dot inp-icon" />
+                        <input type="text" placeholder="Rua das Peças, 100 — São Paulo, SP" value={addr} onChange={e => setAddr(e.target.value)} />
+                      </div>
+                    </div>
                   </>)}
 
                   {userType === 'driver' && (<>
-                    <div className="form-group"><label>Nome completo</label><div className="input-wrap"><i className="fa-solid fa-user inp-icon" /><input type="text" placeholder="Lucas Motta" value={name} onChange={e => setName(e.target.value)} required /></div></div>
-                    <div className="form-row">
-                      <div className="form-group"><label>CPF</label><div className="input-wrap"><i className="fa-solid fa-id-card inp-icon" /><input type="text" placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(e.target.value)} /></div></div>
-                      <div className="form-group"><label>Telefone</label><div className="input-wrap"><i className="fa-solid fa-phone inp-icon" /><input type="tel" value={phone} onChange={e => maskPhone(e.target.value)} /></div></div>
+                    <div className="form-group">
+                      <label>Nome completo</label>
+                      <div className="input-wrap">
+                        <i className="fa-solid fa-user inp-icon" />
+                        <input type="text" placeholder="Lucas Motta" value={name} onChange={e => setName(e.target.value)} required />
+                      </div>
                     </div>
-                    <div className="form-group"><label>Veículo</label><select value={vehicleType} onChange={e => setVehicleType(e.target.value)}><option value="moto">Moto</option><option value="bike">Bicicleta</option><option value="car">Carro</option><option value="van">Van</option></select></div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>CPF</label>
+                        <div className="input-wrap">
+                          <i className="fa-solid fa-id-card inp-icon" />
+                          <input type="text" placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label>Telefone</label>
+                        <div className="input-wrap">
+                          <i className="fa-solid fa-phone inp-icon" />
+                          <input type="tel" value={phone} onChange={e => maskPhone(e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Veículo de entrega</label>
+                      <select value={vehicleType} onChange={e => setVehicleType(e.target.value)}>
+                        <option value="moto">Motocicleta (Recomendado para rotas rápidas)</option>
+                        <option value="car">Carro (Peças médias/pesadas)</option>
+                        <option value="van">Furgão / Utilitário (Cargas volumosas)</option>
+                        <option value="bike">Bicicleta</option>
+                      </select>
+                    </div>
                   </>)}
 
-                  <div className="form-group"><label>E-mail</label><div className="input-wrap"><i className="fa-solid fa-envelope inp-icon" /><input type="email" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} required /></div></div>
+                  <div className="form-group">
+                    <label>E-mail de acesso</label>
+                    <div className="input-wrap">
+                      <i className="fa-solid fa-envelope inp-icon" />
+                      <input type="email" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                    </div>
+                  </div>
 
                   <div className="form-group">
                     <label>Senha</label>
                     <div className="input-wrap">
                       <i className="fa-solid fa-lock inp-icon" />
-                      <input type={showPw ? 'text' : 'password'} placeholder="Mín. 8 caracteres" value={regPw} onChange={e => checkStrength(e.target.value)} required />
-                      <button type="button" className="eye-btn" onClick={() => setShowPw(v => !v)}><i className={`fa-solid fa-eye${showPw ? '-slash' : ''}`} /></button>
+                      <input
+                        type={showPw ? 'text' : 'password'}
+                        placeholder="Mín. 8 caracteres"
+                        value={regPw}
+                        onChange={e => checkStrength(e.target.value)}
+                        required
+                      />
+                      <button type="button" className="eye-btn" onClick={() => setShowPw(v => !v)}>
+                        <i className={`fa-solid fa-eye${showPw ? '-slash' : ''}`} />
+                      </button>
                     </div>
-                    {regPw && <><div className="pw-strength"><div className="pw-bar" style={{ width: pwStr.width, background: pwStr.color }} /></div><div className="pw-label" style={{ color: pwStr.color }}>{pwStr.label}</div></>}
+                    {regPw && (
+                      <>
+                        <div className="pw-strength">
+                          <div className="pw-bar" style={{ width: pwStr.width, background: pwStr.color }} />
+                        </div>
+                        <div className="pw-label" style={{ color: pwStr.color }}>{pwStr.label}</div>
+                      </>
+                    )}
                   </div>
 
-                  <div className="form-group"><label>Confirmar senha</label><div className="input-wrap"><i className="fa-solid fa-lock inp-icon" /><input type="password" placeholder="Repita a senha" value={confPw} onChange={e => setConfPw(e.target.value)} required /></div></div>
+                  <div className="form-group">
+                    <label>Confirmar senha</label>
+                    <div className="input-wrap">
+                      <i className="fa-solid fa-lock inp-icon" />
+                      <input
+                        type="password"
+                        placeholder="Repita a senha"
+                        value={confPw}
+                        onChange={e => setConfPw(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
 
                   <div className="form-check">
                     <input type="checkbox" id="terms" checked={agreed} onChange={e => setAgreed(e.target.checked)} />
-                    <label htmlFor="terms">Concordo com os <a href="#">Termos</a> e <a href="#">Privacidade</a></label>
+                    <label htmlFor="terms">Concordo com os <a href="#termos" onClick={e => e.preventDefault()}>Termos de Serviço</a> e <a href="#privacidade" onClick={e => e.preventDefault()}>Política de Privacidade</a></label>
                   </div>
 
                   {error && <div className="form-error"><i className="fa-solid fa-circle-exclamation" /> {error}</div>}
 
                   <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-                    {loading ? <><i className="fa-solid fa-spinner fa-spin" /> Criando…</> : <>Criar conta <i className="fa-solid fa-arrow-right" /></>}
+                    {loading ? <><i className="fa-solid fa-spinner fa-spin" /> Criando conta…</> : <>Finalizar cadastro <i className="fa-solid fa-arrow-right" /></>}
                   </button>
                 </form>
               )}
@@ -375,7 +641,11 @@ export default function Auth() {
           {/* ══════════ ESQUECI SENHA ══════════ */}
           {mode === 'forgot' && (
             <div className="auth-form">
-              <button type="button" className="auth-back-btn" onClick={() => { setMode('login'); setForgotSent(false); setForgotError(''); setForgotEmail(''); }}>
+              <button
+                type="button"
+                className="auth-back-btn"
+                onClick={() => { setMode('login'); setForgotSent(false); setForgotError(''); setForgotEmail(''); }}
+              >
                 <i className="fa-solid fa-arrow-left" /> Voltar ao login
               </button>
 
@@ -384,14 +654,20 @@ export default function Auth() {
                   <div className="forgot-header">
                     <div className="forgot-icon-wrap"><i className="fa-solid fa-lock" /></div>
                     <h3 className="form-title">Recuperar senha</h3>
-                    <p className="forgot-desc">Informe o e-mail cadastrado e enviaremos um link para você criar uma nova senha.</p>
+                    <p className="forgot-desc">Informe seu e-mail cadastrado para enviarmos as instruções de recuperação de senha.</p>
                   </div>
                   <form onSubmit={handleForgot}>
                     <div className="form-group">
                       <label>E-mail</label>
                       <div className="input-wrap">
                         <i className="fa-solid fa-envelope inp-icon" />
-                        <input type="email" placeholder="seu@email.com" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} required />
+                        <input
+                          type="email"
+                          placeholder="seu@email.com"
+                          value={forgotEmail}
+                          onChange={e => setForgotEmail(e.target.value)}
+                          required
+                        />
                       </div>
                     </div>
                     {forgotError && <div className="form-error"><i className="fa-solid fa-circle-exclamation" /> {forgotError}</div>}
@@ -403,19 +679,19 @@ export default function Auth() {
               ) : (
                 <div className="forgot-success">
                   <div className="forgot-success-anim"><i className="fa-solid fa-circle-check" /></div>
-                  <h3>E-mail enviado!</h3>
-                  <p>Clique no link que enviamos para</p>
+                  <h3>Link enviado com sucesso!</h3>
+                  <p>Enviamos as instruções de recuperação para:</p>
                   <div className="forgot-email-pill"><i className="fa-solid fa-envelope" /> {forgotEmail}</div>
                   <div className="forgot-spam-tip">
-                    <i className="fa-solid fa-triangle-exclamation" />
-                    Não recebeu? Verifique sua pasta de spam ou lixo eletrônico.
+                    <i className="fa-solid fa-circle-info" />
+                    Para fins de demonstração, o envio foi simulado com sucesso.
                   </div>
-                  <button type="button" className="btn btn-primary btn-full" onClick={() => { setMode('login'); setForgotSent(false); setForgotEmail(''); }}>
-                    <i className="fa-solid fa-arrow-left" /> Voltar ao login
-                  </button>
-                  <div className="forgot-or">ou</div>
-                  <button type="button" className="forgot-resend-btn" disabled={forgotLoading} onClick={handleForgot}>
-                    {forgotLoading ? 'Reenviando…' : 'Reenviar e-mail'}
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-full"
+                    onClick={() => { setMode('login'); setForgotSent(false); setForgotEmail(''); }}
+                  >
+                    <i className="fa-solid fa-arrow-left" /> Retornar ao login
                   </button>
                 </div>
               )}

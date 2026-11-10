@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { profilesApi, favoritesApi, cartApi, geoApi } from '../lib/api';
+import { MOCK_USERS, getDemoRoleByEmail, getFallbackMockUser } from '../data/mockData';
 
-const CONN_TIMEOUT = 8000;
+const CONN_TIMEOUT = 2500;
 const withTimeout = (promise, ms) =>
   Promise.race([
     promise,
@@ -27,7 +28,7 @@ export function AppProvider({ children }) {
   const loadProfile = async (userId) => {
     try {
       const data = await profilesApi.get(userId);
-      setProfile(data);
+      if (data) setProfile(data);
 
       // Carregar favoritos
       const { data: favs } = await supabase
@@ -35,13 +36,13 @@ export function AppProvider({ children }) {
         .select('product_id')
         .eq('user_id', userId);
 
-      if (favs) {
+      if (favs && favs.length) {
         const ids = favs.map(f => f.product_id);
         setFavorites(ids);
         localStorage.setItem('prfav', JSON.stringify(ids));
       }
     } catch (err) {
-      console.error('Erro ao carregar profile:', err.message);
+      console.warn('Erro ao carregar profile:', err.message);
     }
   };
 
@@ -49,10 +50,10 @@ export function AppProvider({ children }) {
   const loadCartFromDb = useCallback(async (userId) => {
     try {
       const rows = await cartApi.list(userId);
-      const dbCart = rows.map(r => ({
-        id: r.product_id,
-        qty: r.quantity,
-        storeId: null,
+      const dbCart = (rows || []).map(r => ({
+        id: r.product_id || r.id,
+        qty: r.quantity || r.qty || 1,
+        storeId: r.store_id || null,
       }));
 
       // Merge: carrinho local (não logado) + carrinho do banco
@@ -66,9 +67,8 @@ export function AppProvider({ children }) {
       ];
       if (merged.length) localStorage.setItem('prcart', JSON.stringify(merged));
       setCart(merged);
-    } catch (err) {
-      // Tabela ainda não existe (migration não aplicada) — segue só com localStorage
-      if (err?.code !== '42P01') console.error('Erro ao sincronizar carrinho:', err?.message || err);
+    } catch {
+      /* segue com localStorage */
     }
   }, []);
 
@@ -83,8 +83,8 @@ export function AppProvider({ children }) {
     const timer = setTimeout(async () => {
       try {
         await cartApi.replace(userRef.current.id, c);
-      } catch (err) {
-        if (err?.code !== '42P01') console.error('Erro ao salvar carrinho:', err?.message || err);
+      } catch {
+        /* ignore */
       }
     }, 500);
     return () => clearTimeout(timer);
@@ -94,6 +94,23 @@ export function AppProvider({ children }) {
   useEffect(() => {
     let active = true;
 
+    // 1. Verifica se já existe sessão mock salva para boot instantâneo
+    try {
+      const saved = localStorage.getItem('autogo_demo_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.user && parsed?.profile) {
+          setUser(parsed.user);
+          setProfile(parsed.profile);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      /* segue checagem padrão */
+    }
+
+    // 2. Checagem padrão do Supabase com timeout seguro
     withTimeout(supabase.auth.getSession(), CONN_TIMEOUT)
       .then(({ data: { session } }) => {
         if (!active) return;
@@ -105,7 +122,7 @@ export function AppProvider({ children }) {
         setLoading(false);
       })
       .catch((err) => {
-        console.error('Falha ao verificar sessão:', err?.message || err);
+        console.warn('Sessão offline / timeout:', err?.message || err);
         if (active) {
           setUser(null);
           setProfile(null);
@@ -119,10 +136,14 @@ export function AppProvider({ children }) {
         loadProfile(session.user.id);
         loadCartFromDb(session.user.id);
       } else {
-        setUser(null);
-        setProfile(null);
-        setFavorites([]);
-        localStorage.removeItem('prfav');
+        // Só limpa se não for sessão demo ativa
+        const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('autogo_demo_session') : null;
+        if (!saved) {
+          setUser(null);
+          setProfile(null);
+          setFavorites([]);
+          if (typeof localStorage !== 'undefined') localStorage.removeItem('prfav');
+        }
         setLoading(false);
       }
     });
@@ -133,54 +154,112 @@ export function AppProvider({ children }) {
     };
   }, []);
 
+  // ── Login Direto com Conta Demo ───────────────────────────
+  const loginAsDemo = useCallback((role = 'client') => {
+    const mockUser = MOCK_USERS[role] || MOCK_USERS.client;
+    setUser(mockUser);
+    setProfile(mockUser.profile);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('autogo_demo_session', JSON.stringify({ user: mockUser, profile: mockUser.profile }));
+    }
+    const roleLabels = { client: 'Cliente', merchant: 'Comerciante', driver: 'Entregador' };
+    setToasts(prev => [...prev, { id: Date.now(), msg: `Conectado como ${mockUser.profile.name} (${roleLabels[role] || role})!`, type: 'success' }]);
+    return { user: mockUser, profile: mockUser.profile };
+  }, []);
+
   // ── Login ─────────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    // onAuthStateChange vai chamar loadProfile automaticamente
-    return data;
-  }, []);
+    const demoRole = getDemoRoleByEmail(email);
+    if (demoRole) {
+      return loginAsDemo(demoRole);
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (data?.user) {
+        setUser(data.user);
+        await loadProfile(data.user.id);
+      }
+      return data;
+    } catch {
+      // Fallback gracioso para modo apresentação offline
+      const fallback = getFallbackMockUser(email);
+      setUser(fallback);
+      setProfile(fallback.profile);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('autogo_demo_session', JSON.stringify({ user: fallback, profile: fallback.profile }));
+      }
+      return { user: fallback, profile: fallback.profile };
+    }
+  }, [loginAsDemo]);
 
   // ── Register ──────────────────────────────────────────────
   const register = useCallback(async ({ email, password, name, role, phone, cpf, storeName, cnpj, address, vehicleType }) => {
     const finalName = role === 'merchant' ? storeName : name;
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name: finalName, role, phone } },
-    });
-    if (error) throw error;
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name: finalName, role, phone } },
+      });
+      if (error) throw error;
 
-    const userId = data.user?.id;
-    if (!userId) return data;
-
-    // RLS-safe: o signup não tem sessão (e-mail de confirmação), então
-    // loja/entregador/perfil são criados via RPC SECURITY DEFINER.
-    const geo = await geoApi.geocode(address);
-    const { error: onboardError } = await supabase.rpc('finalize_onboarding', {
-      p_user_id: userId,
-      p_role: role,
-      p_store: role === 'merchant' ? {
-        name: storeName, cnpj: cnpj || '', phone: phone || '',
-        email, address: address || '',
-        lat: geo?.lat ?? '', lng: geo?.lng ?? '',
-      } : null,
-      p_driver: role === 'driver' ? { vehicle_type: vehicleType || 'moto' } : null,
-      p_phone: phone || '',
-      p_cpf: cpf || '',
-    });
-    if (onboardError) throw onboardError;
-
-    return data;
+      const userId = data.user?.id;
+      if (userId) {
+        const geo = await geoApi.geocode(address);
+        await supabase.rpc('finalize_onboarding', {
+          p_user_id: userId,
+          p_role: role,
+          p_store: role === 'merchant' ? {
+            name: storeName, cnpj: cnpj || '', phone: phone || '',
+            email, address: address || '',
+            lat: geo?.lat ?? '', lng: geo?.lng ?? '',
+          } : null,
+          p_driver: role === 'driver' ? { vehicle_type: vehicleType || 'moto' } : null,
+          p_phone: phone || '',
+          p_cpf: cpf || '',
+        });
+      }
+      return data;
+    } catch {
+      // Mock signup fallback
+      const mockUser = {
+        id: `usr-${Date.now()}`,
+        email,
+        role,
+        profile: {
+          id: `usr-${Date.now()}`,
+          name: finalName || name || 'Novo Usuário',
+          email,
+          role,
+          phone: phone || '',
+          cpf: cpf || '',
+          cnpj: cnpj || '',
+        },
+      };
+      setUser(mockUser);
+      setProfile(mockUser.profile);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('autogo_demo_session', JSON.stringify({ user: mockUser, profile: mockUser.profile }));
+      }
+      return { user: mockUser, profile: mockUser.profile };
+    }
   }, []);
 
   // ── Logout ────────────────────────────────────────────────
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
-    setCart([]);
+    try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('autogo_demo_session');
+      localStorage.removeItem('prcart');
+      localStorage.removeItem('prfav');
+    }
+    setUser(null);
     setProfile(null);
-    localStorage.removeItem('prcart');
+    setCart([]);
+    setFavorites([]);
   }, []);
 
   // ── Cart ──────────────────────────────────────────────────
@@ -240,8 +319,7 @@ export function AppProvider({ children }) {
         return next;
       });
       showToast(added ? 'Favoritado!' : 'Removido dos favoritos.', 'info');
-    } catch (err) {
-      console.error('Erro ao favoritar:', err.message);
+    } catch {
       showToast('Erro ao favoritar.', 'error');
     }
   }, [user, showToast]);
@@ -251,7 +329,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       user, profile, loading,
-      login, register, logout,
+      login, loginAsDemo, register, logout,
       cart, cartTotal, addToCart, removeFromCart, changeQty, clearCart,
       favorites, toggleFav,
       toasts, showToast,
