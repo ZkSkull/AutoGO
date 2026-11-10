@@ -85,6 +85,11 @@ function ListProductCard({ product:p, onOpen, onAdd, onFav, isFav, showToast }) 
           {p.badge&&<span className="product-badge-tag">{p.badge}</span>}
         </div>
         <div className="list-product-name">{p.name}</div>
+        {p.store?.name && (
+          <div style={{fontSize:'.8rem',color:'var(--gray-500)',margin:'.2rem 0'}}>
+            <i className="fa-solid fa-store" style={{color:'var(--red)',marginRight:'.3rem'}} />{p.store.name}
+          </div>
+        )}
         <div style={{fontSize:'.83rem',color:'var(--gray-400)',margin:'.3rem 0'}}><i className="fa-solid fa-car" style={{color:'var(--red)',marginRight:'.3rem'}} />{p.compat}</div>
         <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
           <span style={{color:'#F5A623',fontSize:'.85rem'}}>{'★'.repeat(Math.floor(p.rating))}</span>
@@ -112,6 +117,7 @@ import { fmt } from '../../data';
 
 export default function ClientShop({
   products, prodLoading, prodError, onRetryProducts,
+  stores = [], selectedStoreId = null, onSelectStore, onViewAllStores,
   filters, onFilterChange, onClearFilters,
   sort, onSortChange, viewMode, onViewModeChange, cat, onCatChange,
   search, onSearchChange, onOpenProduct,
@@ -120,23 +126,25 @@ export default function ClientShop({
 }) {
   const [page, setPage] = useState(1);
 
-  React.useEffect(() => { setPage(1); }, [cat, search, filters, sort]);
+  React.useEffect(() => { setPage(1); }, [cat, search, filters, sort, selectedStoreId]);
   const filtered = useMemo(() => {
     return products
+      .filter(p => !selectedStoreId || p.storeId === selectedStoreId || p.store_id === selectedStoreId)
       .filter(p => cat==='Tudo' || p.category===cat)
-      .filter(p => { if (!search) return true; const q=search.toLowerCase(); return p.name.toLowerCase().includes(q)||(p.brand||'').toLowerCase().includes(q)||(p.compat||'').toLowerCase().includes(q); })
+      .filter(p => { if (!search) return true; const q=search.toLowerCase(); return p.name.toLowerCase().includes(q)||(p.brand||'').toLowerCase().includes(q)||(p.compat||'').toLowerCase().includes(q)||(p.store?.name||'').toLowerCase().includes(q); })
       .filter(p => { if (filters.customMin&&p.price<Number(filters.customMin)) return false; if (filters.customMax&&p.price>Number(filters.customMax)) return false; if (filters.customMin||filters.customMax) return true; return priceInRange(p.price,filters.priceRange); })
       .filter(p => filters.brands.length===0||filters.brands.includes(p.brand))
       .filter(p => filters.condition==='all'||p.condition===filters.condition)
       .filter(p => (p.rating||5)>=filters.minRating)
       .filter(p => !filters.onlyInStock||p.stock>0)
       .sort((a,b) => sort==='price-asc'?a.price-b.price:sort==='price-desc'?b.price-a.price:sort==='rating'?(b.rating||5)-(a.rating||5):sort==='newest'?new Date(b.created_at)-new Date(a.created_at):0);
-  }, [products, cat, search, filters, sort]);
+  }, [products, cat, search, filters, sort, selectedStoreId]);
 
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const activeFilterCount = [filters.priceRange!=='all'||filters.customMin||filters.customMax, filters.brands.length>0, filters.condition!=='all', filters.minRating>0, filters.onlyInStock].filter(Boolean).length;
+  const selectedStoreObj = stores.find(s => s.id === selectedStoreId);
 
   return (
     <div>
@@ -146,6 +154,84 @@ export default function ClientShop({
           {onRetryProducts && <button className="btn btn-outline btn-sm" onClick={onRetryProducts}>Tentar novamente</button>}
         </div>
       )}
+
+      {/* Lojas Disponíveis */}
+      {stores.length > 0 && (
+        <div style={{ marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '.65rem' }}>
+            <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.05rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '.45rem' }}>
+              <i className="fa-solid fa-store" style={{ color: 'var(--red)' }} /> Lojas Disponíveis ({stores.length})
+            </h3>
+            <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+              {selectedStoreId && (
+                <button className="link-btn" onClick={() => onSelectStore && onSelectStore(null)}>
+                  Mostrar todas as lojas
+                </button>
+              )}
+              {onViewAllStores && (
+                <button className="btn btn-outline btn-sm" onClick={onViewAllStores}>
+                  <i className="fa-solid fa-shop" /> Ver detalhes das lojas
+                </button>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '.75rem' }}>
+            {stores.map(st => {
+              const isSelected = selectedStoreId === st.id;
+              const storeProdCount = products.filter(p => (p.storeId || p.store_id) === st.id).length;
+              return (
+                <div
+                  key={st.id}
+                  onClick={() => onSelectStore && onSelectStore(isSelected ? null : st.id)}
+                  style={{
+                    background: '#fff',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '.85rem 1rem',
+                    border: isSelected ? '2px solid var(--red)' : '1px solid var(--gray-200)',
+                    boxShadow: isSelected ? '0 4px 14px rgba(225,26,44,.14)' : 'var(--shadow-sm)',
+                    cursor: 'pointer',
+                    transition: 'all .2s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.3rem' }}>
+                    <strong style={{ fontSize: '.9rem', color: 'var(--dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {st.name}
+                    </strong>
+                    <span style={{
+                      fontSize: '.7rem',
+                      fontWeight: 700,
+                      padding: '.15rem .45rem',
+                      borderRadius: 100,
+                      background: st.is_open ? 'rgba(34,197,94,.12)' : 'var(--gray-100)',
+                      color: st.is_open ? 'var(--green)' : 'var(--gray-400)',
+                      flexShrink: 0,
+                    }}>
+                      {st.is_open ? '● Aberta' : '● Fechada'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '.78rem', color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap' }}>
+                    <span style={{ color: '#F5A623', fontWeight: 700 }}>★ {(st.rating || 4.8).toFixed(1)}</span>
+                    <span>· {storeProdCount} peça{storeProdCount !== 1 ? 's' : ''}</span>
+                    {st.distance && <span>· {st.distance}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedStoreObj && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(225,26,44,.07)', border: '1px solid rgba(225,26,44,.25)', borderRadius: 'var(--radius)', padding: '.6rem 1rem', marginBottom: '.9rem', fontSize: '.88rem' }}>
+          <span>
+            Exibindo catálogo de <strong>{selectedStoreObj.name}</strong> ({filtered.length} produto{filtered.length !== 1 ? 's' : ''})
+          </span>
+          <button className="btn btn-outline btn-sm" onClick={() => onSelectStore && onSelectStore(null)}>
+            <i className="fa-solid fa-xmark" /> Ver todas
+          </button>
+        </div>
+      )}
+
       <div className="cat-strip">
         {CATS.map(c=><button key={c} className={`cat-pill${cat===c?' active':''}`} onClick={()=>onCatChange(c)}>{c}</button>)}
       </div>

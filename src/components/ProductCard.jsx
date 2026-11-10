@@ -25,8 +25,14 @@ export default function ProductCard({ product, theme = 'light', onOpen }) {
         {product.badge && <span className="product-badge-tag">{product.badge}</span>}
       </div>
       <div className="product-body">
-        <div className="product-brand">{product.brand} · {'★'.repeat(Math.floor(product.rating))}</div>
+        <div className="product-brand">{product.brand} · {'★'.repeat(Math.floor(product.rating || 5))}</div>
         <div className="product-name">{product.name}</div>
+        {product.store?.name && (
+          <div style={{ fontSize: '.76rem', color: 'var(--gray-400)', marginBottom: '.35rem', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
+            <i className="fa-solid fa-store" style={{ color: 'var(--red)', fontSize: '.7rem' }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.store.name}</span>
+          </div>
+        )}
         <div className="product-price">{fmt(product.price)}</div>
         <div className="product-actions">
           <button className="btn btn-primary btn-sm" onClick={handleAddCart}>

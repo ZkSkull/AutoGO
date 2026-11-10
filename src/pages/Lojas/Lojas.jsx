@@ -307,7 +307,7 @@ export default function Lojas() {
                     ))}
                   </div>
 
-                  <button className="btn btn-primary btn-full" style={{marginTop:'.5rem'}} onClick={() => navigate('/client')}>
+                  <button className="btn btn-primary btn-full" style={{marginTop:'.5rem'}} onClick={() => navigate(`/client?store=${store.id}`)}>
                     <i className="fa-solid fa-bag-shopping" /> Ver todos os produtos
                   </button>
                 </div>

@@ -17,22 +17,27 @@ import ClientProfile from './ClientProfile';
 import './Client.css';
 
 const NAV = [
-  { page: 'shop',      label: 'Loja',        icon: 'fa-solid fa-shop'          },
-  { page: 'cart',      label: 'Carrinho',     icon: 'fa-solid fa-cart-shopping' },
-  { page: 'orders',    label: 'Meus Pedidos', icon: 'fa-solid fa-box'           },
-  { page: 'favorites', label: 'Favoritos',    icon: 'fa-solid fa-heart'         },
-  { page: 'profile',   label: 'Meu Perfil',   icon: 'fa-solid fa-circle-user'   },
+  { page: 'shop',      label: 'Loja & Produtos',   icon: 'fa-solid fa-shop'          },
+  { page: 'stores',    label: 'Lojas Disponíveis', icon: 'fa-solid fa-store'         },
+  { page: 'cart',      label: 'Carrinho',          icon: 'fa-solid fa-cart-shopping' },
+  { page: 'orders',    label: 'Meus Pedidos',      icon: 'fa-solid fa-box'           },
+  { page: 'favorites', label: 'Favoritos',         icon: 'fa-solid fa-heart'         },
+  { page: 'profile',   label: 'Meu Perfil',        icon: 'fa-solid fa-circle-user'   },
 ];
 
 export default function Client() {
   const { user, profile, cart, cartTotal, addToCart, removeFromCart, changeQty, clearCart, favorites, toggleFav, showToast } = useApp();
   const [params] = useSearchParams();
 
-  const [page,            setPage]           = useState('shop');
+  const [page,            setPage]            = useState('shop');
   const [sidebarOpen,     setSidebarOpen]     = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [cat,             setCat]             = useState('Tudo');
   const [search,          setSearch]          = useState(params.get('search')||'');
+  const [selectedStoreId, setSelectedStoreId] = useState(params.get('store')||null);
+  const [storeSearch,     setStoreSearch]     = useState('');
+  const [onlyOpenStores,  setOnlyOpenStores]  = useState(false);
+  const [stores,          setStores]          = useState(() => mockDb.getStores());
   const [sort,            setSort]            = useState('relevance');
   const [viewMode,        setViewMode]        = useState('grid');
   const [filters,         setFilters]         = useState({ priceRange:'all', customMin:'', customMax:'', brands:[], condition:'all', minRating:0, onlyInStock:false });
@@ -58,27 +63,50 @@ export default function Client() {
 
   const realtimeChannel = useRef(null);
 
-  const { data: products, loading: prodLoading, error: prodError, refetch: refetchProducts } = useSupabaseQuery(
-    () => supabase
-      .from('products')
-      .select('*, store:stores(id, name, rating, is_open)')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        const list = (!error && data && data.length) ? data : mockDb.getProducts();
-        return (list || []).map(p => ({
-          ...p, icon: p.icon_emoji || '🔩',
-          compat: p.compatibility || '', code: p.code || '',
-          badge: p.badge || '', storeId: p.store_id,
-        }));
-      }),
+  const mapProducts = (list) => (list || []).map(p => ({
+    ...p,
+    icon: p.icon_emoji || p.icon || '🔩',
+    compat: p.compatibility || p.compat || '',
+    code: p.code || '',
+    badge: p.badge || '',
+    storeId: p.store_id || p.storeId,
+  }));
+
+  const { data: queriedProducts, loading: prodLoading, error: prodError, refetch: refetchProducts } = useSupabaseQuery(
+    async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*, store:stores(id, name, rating, is_open)')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      const list = (!error && data && data.length) ? data : mockDb.getProducts();
+      return mapProducts(list);
+    },
     []
   );
+
+  const products = useMemo(
+    () => (queriedProducts && queriedProducts.length ? queriedProducts : mapProducts(mockDb.getProducts())),
+    [queriedProducts]
+  );
+
+  useEffect(() => {
+    supabase
+      .from('stores')
+      .select('*, owner:profiles(name)')
+      .order('rating', { ascending: false })
+      .then(({ data, error }) => {
+        if (!error && data && data.length) setStores(data);
+        else setStores(mockDb.getStores());
+      })
+      .catch(() => setStores(mockDb.getStores()));
+  }, []);
 
   useEffect(() => {
     if (params.get('cat'))    setCat(params.get('cat'));
     if (params.get('page') === 'cart') setPage('cart');
     if (params.get('search')) setSearch(params.get('search'));
+    if (params.get('store'))  setSelectedStoreId(params.get('store'));
   }, [params]);
 
   useEffect(() => {
@@ -232,6 +260,7 @@ export default function Client() {
           {page==='shop' && (
             <ClientShop
               products={products||[]} prodLoading={prodLoading} prodError={prodError} onRetryProducts={refetchProducts}
+              stores={stores} selectedStoreId={selectedStoreId} onSelectStore={setSelectedStoreId} onViewAllStores={() => setPage('stores')}
               filters={filters} onFilterChange={handleFilterChange} onClearFilters={clearFilters}
               sort={sort} onSortChange={setSort}
               viewMode={viewMode} onViewModeChange={setViewMode}
@@ -241,6 +270,99 @@ export default function Client() {
               filterPanelOpen={filterPanelOpen} onToggleFilterPanel={() => setFilterPanelOpen(v => !v)}
               onAdd={addToCart} onFav={toggleFav} favorites={favorites} showToast={showToast}
             />
+          )}
+          {page==='stores' && (
+            <div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem',flexWrap:'wrap',gap:'1rem'}}>
+                <div>
+                  <h2 style={{fontFamily:'var(--font-head)',fontSize:'1.8rem',fontWeight:900}}>Lojas Disponíveis</h2>
+                  <p style={{color:'var(--gray-500)',fontSize:'.9rem'}}>Distribuidoras e autopeças parceiras prontas para atender na sua região</p>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:'.75rem',flexWrap:'wrap'}}>
+                  <div className="search-bar-std" style={{maxWidth:300}}>
+                    <i className="fa-solid fa-magnifying-glass search-icon" />
+                    <input
+                      value={storeSearch}
+                      onChange={e=>setStoreSearch(e.target.value)}
+                      placeholder="Buscar loja, bairro ou cidade…"
+                    />
+                    {storeSearch && (
+                      <button type="button" className="clear-btn" onClick={()=>setStoreSearch('')}>
+                        <i className="fa-solid fa-xmark" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    className={`cat-pill${onlyOpenStores?' active':''}`}
+                    onClick={()=>setOnlyOpenStores(v=>!v)}
+                    type="button"
+                  >
+                    <i className="fa-solid fa-circle" style={{fontSize:'.55rem',color:onlyOpenStores?'#fff':'var(--green)',marginRight:'.35rem'}} />
+                    Abertas agora
+                  </button>
+                </div>
+              </div>
+
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))',gap:'1rem'}}>
+                {stores
+                  .filter(s => !onlyOpenStores || s.is_open)
+                  .filter(s => !storeSearch.trim() || [s.name, s.address, s.city, s.description].some(v => (v||'').toLowerCase().includes(storeSearch.toLowerCase())))
+                  .map(st => {
+                    const stProducts = products.filter(p => (p.storeId || p.store_id) === st.id);
+                    return (
+                      <div key={st.id} className="dash-card" style={{display:'flex',flexDirection:'column',justifyContent:'space-between',gap:'.9rem'}}>
+                        <div>
+                          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'.6rem',marginBottom:'.5rem'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'.75rem'}}>
+                              <div style={{width:44,height:44,borderRadius:12,background:'rgba(225,26,44,.1)',color:'var(--red)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>
+                                <i className="fa-solid fa-store" />
+                              </div>
+                              <div>
+                                <h3 style={{fontFamily:'var(--font-head)',fontSize:'1.05rem',fontWeight:800,margin:0}}>{st.name}</h3>
+                                <div style={{fontSize:'.8rem',color:'var(--gray-500)',display:'flex',alignItems:'center',gap:'.5rem',marginTop:'.15rem'}}>
+                                  <span style={{color:'#F5A623',fontWeight:700}}>★ {(st.rating||4.8).toFixed(1)}</span>
+                                  <span>({st.review_count||30} avaliações)</span>
+                                  {st.distance && <span>· {st.distance}</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <span style={{
+                              fontSize:'.74rem',
+                              fontWeight:700,
+                              padding:'.22rem .6rem',
+                              borderRadius:100,
+                              background:st.is_open?'rgba(34,197,94,.12)':'var(--gray-100)',
+                              color:st.is_open?'var(--green)':'var(--gray-400)',
+                              flexShrink:0,
+                            }}>
+                              {st.is_open ? '● Aberta' : '● Fechada'}
+                            </span>
+                          </div>
+                          {st.description && (
+                            <p style={{fontSize:'.85rem',color:'var(--gray-600)',marginBottom:'.65rem',lineHeight:1.45}}>{st.description}</p>
+                          )}
+                          <div style={{display:'flex',flexDirection:'column',gap:'.3rem',fontSize:'.82rem',color:'var(--gray-500)'}}>
+                            {st.address && <div><i className="fa-solid fa-location-dot" style={{color:'var(--red)',width:16}} /> {st.address}</div>}
+                            {st.phone && <div><i className="fa-solid fa-phone" style={{color:'var(--red)',width:16}} /> {st.phone}</div>}
+                            <div><i className="fa-solid fa-boxes-stacked" style={{color:'var(--red)',width:16}} /> {stProducts.length} produto{stProducts.length!==1?'s':''} em estoque</div>
+                          </div>
+                        </div>
+                        <div style={{display:'flex',gap:'.5rem',paddingTop:'.6rem',borderTop:'1px solid var(--gray-100)'}}>
+                          <button
+                            className="btn btn-primary btn-sm btn-full"
+                            onClick={()=>{
+                              setSelectedStoreId(st.id);
+                              setPage('shop');
+                            }}
+                          >
+                            <i className="fa-solid fa-bag-shopping" /> Ver Catálogo ({stProducts.length})
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
           )}
           {page==='cart' && (
             <ClientCart
@@ -280,7 +402,13 @@ export default function Client() {
             <div className="product-detail-info">
               <div style={{fontSize:'.85rem',color:'var(--gray-400)'}}>{productModal.brand} · #{productModal.code}</div>
               <div className="product-detail-price">{fmt(productModal.price)}</div>
-              <div style={{fontSize:'.82rem',color:'#F5A623'}}>{'★'.repeat(Math.floor(productModal.rating))} {productModal.rating}</div>
+              <div style={{fontSize:'.82rem',color:'#F5A623'}}>{'★'.repeat(Math.floor(productModal.rating || 5))} {productModal.rating}</div>
+              {productModal.store?.name && (
+                <div style={{fontSize:'.85rem',color:'var(--gray-600)',marginTop:'.3rem'}}>
+                  <i className="fa-solid fa-store" style={{color:'var(--red)',marginRight:'.35rem'}} />
+                  Vendido por: <strong>{productModal.store.name}</strong>
+                </div>
+              )}
               <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',margin:'.5rem 0'}}>
                 <span style={{background:'rgba(225,26,44,.1)',color:'var(--red)',padding:'.25rem .65rem',borderRadius:6,fontSize:'.8rem'}}>{productModal.category}</span>
                 <span style={{background:'var(--gray-100)',padding:'.25rem .65rem',borderRadius:6,fontSize:'.8rem'}}>{productModal.stock} em estoque</span>

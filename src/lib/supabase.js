@@ -122,8 +122,8 @@ function resolveMockTable(table, state) {
 }
 
 // ── Wrapper Proxy com Fallback Automático ────────────────────────────────────
-function createSafeBuilder(targetBuilder, table) {
-  const queryState = {
+function createSafeBuilder(targetBuilder, table, sharedState = null) {
+  const queryState = sharedState || {
     filters: [],
     isSingle: false,
     isHead: false,
@@ -131,47 +131,70 @@ function createSafeBuilder(targetBuilder, table) {
     order: null,
   };
 
+  const executeQuery = () => new Promise((resolve) => {
+    const savedSession = getSavedMockSession();
+    const minDelay = 180;
+    const start = Date.now();
+
+    const finish = (val) => {
+      const elapsed = Date.now() - start;
+      const wait = Math.max(0, minDelay - elapsed);
+      setTimeout(() => resolve(val), wait);
+    };
+
+    // Quando logado em modo demonstração, resolve direto do mockDb sem risco de tabela vazia no Supabase
+    if (savedSession) {
+      finish(resolveMockTable(table, queryState));
+      return;
+    }
+
+    let settled = false;
+    const done = (val) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      finish(val);
+    };
+
+    const timer = setTimeout(() => {
+      done(resolveMockTable(table, queryState));
+    }, 1200);
+
+    try {
+      Promise.resolve(targetBuilder).then(
+        (res) => {
+          const isEmptyCatalog =
+            ['products', 'stores', 'categories', 'orders', 'reviews', 'addresses', 'vehicles', 'drivers'].includes(table) &&
+            (!res?.data || (Array.isArray(res.data) && res.data.length === 0)) &&
+            !res?.count;
+          if (!res || res.error || isEmptyCatalog) {
+            done(resolveMockTable(table, queryState));
+          } else {
+            done(res);
+          }
+        },
+        () => {
+          done(resolveMockTable(table, queryState));
+        }
+      );
+    } catch {
+      done(resolveMockTable(table, queryState));
+    }
+  });
+
   const handler = {
     get(target, prop) {
       if (prop === 'then') {
-        return (resolve) => {
-          // Se já estiver logado em modo demo ou Supabase desconectado, responde mock com um leve delay realista
-          const savedSession = getSavedMockSession();
-          const executeTimeout = savedSession ? 800 : 1800;
-          const minDelay = 350;
-          const start = Date.now();
-
-          const resolveWithMinDelay = (val) => {
-            const elapsed = Date.now() - start;
-            const wait = Math.max(0, minDelay - elapsed);
-            setTimeout(() => resolve(val), wait);
-          };
-
-          const timer = setTimeout(() => {
-            const fallback = resolveMockTable(table, queryState);
-            resolve(fallback);
-          }, executeTimeout);
-
-          return target.then(
-            (res) => {
-              clearTimeout(timer);
-              if (res && res.error) {
-                const fallback = resolveMockTable(table, queryState);
-                return resolveWithMinDelay(fallback);
-              }
-              return resolve(res);
-            },
-            () => {
-              clearTimeout(timer);
-              const fallback = resolveMockTable(table, queryState);
-              return resolveWithMinDelay(fallback);
-            }
-          ).catch(() => {
-            clearTimeout(timer);
-            const fallback = resolveMockTable(table, queryState);
-            return resolveWithMinDelay(fallback);
-          });
-        };
+        const p = executeQuery();
+        return p.then.bind(p);
+      }
+      if (prop === 'catch') {
+        const p = executeQuery();
+        return p.catch.bind(p);
+      }
+      if (prop === 'finally') {
+        const p = executeQuery();
+        return p.finally.bind(p);
       }
 
       const orig = target[prop];
@@ -199,10 +222,10 @@ function createSafeBuilder(targetBuilder, table) {
           try {
             const res = orig.apply(target, args);
             return (res && typeof res === 'object' && typeof res.then === 'function')
-              ? createSafeBuilder(res, table)
+              ? createSafeBuilder(res, table, queryState)
               : res;
           } catch {
-            return createSafeBuilder(target, table);
+            return createSafeBuilder(target, table, queryState);
           }
         };
       }
