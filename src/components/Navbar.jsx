@@ -16,7 +16,7 @@ const NAV_LINKS = [
 export default function Navbar({ transparent = false }) {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { cartTotal, user } = useApp();
+  const { cartTotal, user, profile, logout } = useApp();
   const [scrolled, setScrolled] = useState(!transparent);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -37,8 +37,9 @@ export default function Navbar({ transparent = false }) {
       navigate('/auth'); 
       return; 
     }
-    if (user.type === 'merchant') navigate('/merchant');
-    else if (user.type === 'driver') navigate('/driver');
+    const role = profile?.role || user?.role || user?.type;
+    if (role === 'merchant') navigate('/merchant');
+    else if (role === 'driver') navigate('/driver');
     else navigate('/client');
   };
 
@@ -84,9 +85,14 @@ export default function Navbar({ transparent = false }) {
             </button>
 
             {user ? (
-              <button className="btn btn-primary navbar-btn-sm" onClick={handleDashboard}>
-                <i className="fa-solid fa-grid-2" /> Painel
-              </button>
+              <>
+                <button className="btn btn-primary navbar-btn-sm" onClick={handleDashboard}>
+                  <i className="fa-solid fa-grid-2" /> Painel
+                </button>
+                <button className="btn btn-outline navbar-btn-sm" onClick={logout} title="Sair da conta">
+                  <i className="fa-solid fa-right-from-bracket" /> Sair
+                </button>
+              </>
             ) : (
               <>
                 <button className="btn btn-outline navbar-btn-sm" onClick={() => navigate('/auth')}>
@@ -125,15 +131,26 @@ export default function Navbar({ transparent = false }) {
 
             <div className="mobile-actions">
               {user ? (
-                <button
-                  className="btn btn-primary btn-full"
-                  onClick={() => {
-                    handleDashboard();
-                    setMobileOpen(false);
-                  }}
-                >
-                  <i className="fa-solid fa-grid-2" /> Ir para o Painel
-                </button>
+                <>
+                  <button
+                    className="btn btn-primary btn-full"
+                    onClick={() => {
+                      handleDashboard();
+                      setMobileOpen(false);
+                    }}
+                  >
+                    <i className="fa-solid fa-grid-2" /> Ir para o Painel
+                  </button>
+                  <button
+                    className="btn btn-outline btn-full"
+                    onClick={() => {
+                      logout();
+                      setMobileOpen(false);
+                    }}
+                  >
+                    <i className="fa-solid fa-right-from-bracket" /> Sair da conta
+                  </button>
+                </>
               ) : (
                 <>
                   <button

@@ -13,12 +13,20 @@ const rawClient = createClient(SUPABASE_URL, SUPABASE_ANON, {
   },
 });
 
-// Helper de sessão mock salva
+// Helper de sessão mock salva (com expiração para não ficar logado eternamente ao abrir o site)
+const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutos
 function getSavedMockSession() {
   try {
-    if (typeof localStorage === 'undefined') return null;
-    const raw = localStorage.getItem('autogo_demo_session');
-    if (raw) return JSON.parse(raw);
+    if (typeof sessionStorage !== 'undefined') {
+      const raw = sessionStorage.getItem('autogo_demo_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (!parsed.ts || Date.now() - parsed.ts < SESSION_TTL_MS) {
+          return parsed;
+        }
+        sessionStorage.removeItem('autogo_demo_session');
+      }
+    }
   } catch {
     /* ignore */
   }
@@ -127,9 +135,17 @@ function createSafeBuilder(targetBuilder, table) {
     get(target, prop) {
       if (prop === 'then') {
         return (resolve) => {
-          // Se já estiver logado em modo demo ou Supabase desconectado, responde mock rapidamente
+          // Se já estiver logado em modo demo ou Supabase desconectado, responde mock com um leve delay realista
           const savedSession = getSavedMockSession();
-          const executeTimeout = savedSession ? 800 : 2000;
+          const executeTimeout = savedSession ? 800 : 1800;
+          const minDelay = 350;
+          const start = Date.now();
+
+          const resolveWithMinDelay = (val) => {
+            const elapsed = Date.now() - start;
+            const wait = Math.max(0, minDelay - elapsed);
+            setTimeout(() => resolve(val), wait);
+          };
 
           const timer = setTimeout(() => {
             const fallback = resolveMockTable(table, queryState);
@@ -141,19 +157,19 @@ function createSafeBuilder(targetBuilder, table) {
               clearTimeout(timer);
               if (res && res.error) {
                 const fallback = resolveMockTable(table, queryState);
-                return resolve(fallback);
+                return resolveWithMinDelay(fallback);
               }
               return resolve(res);
             },
             () => {
               clearTimeout(timer);
               const fallback = resolveMockTable(table, queryState);
-              return resolve(fallback);
+              return resolveWithMinDelay(fallback);
             }
           ).catch(() => {
             clearTimeout(timer);
             const fallback = resolveMockTable(table, queryState);
-            return resolve(fallback);
+            return resolveWithMinDelay(fallback);
           });
         };
       }
@@ -288,6 +304,9 @@ export const supabase = new Proxy(rawClient, {
           if (aProp === 'signOut') {
             return async () => {
               try {
+                if (typeof sessionStorage !== 'undefined') {
+                  sessionStorage.removeItem('autogo_demo_session');
+                }
                 if (typeof localStorage !== 'undefined') {
                   localStorage.removeItem('autogo_demo_session');
                 }

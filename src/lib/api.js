@@ -31,6 +31,9 @@ export const authApi = {
     } catch {
       /* ignore */
     }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('autogo_demo_session');
+    }
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('autogo_demo_session');
     }
@@ -63,8 +66,8 @@ export const authApi = {
       /* fallback */
     }
 
-    if (typeof localStorage !== 'undefined') {
-      const saved = localStorage.getItem('autogo_demo_session');
+    if (typeof sessionStorage !== 'undefined') {
+      const saved = sessionStorage.getItem('autogo_demo_session');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
@@ -90,13 +93,13 @@ export const authApi = {
     }
     const current = await this.getProfile(userId);
     const merged = { ...current, ...updates };
-    if (typeof localStorage !== 'undefined') {
-      const saved = localStorage.getItem('autogo_demo_session');
+    if (typeof sessionStorage !== 'undefined') {
+      const saved = sessionStorage.getItem('autogo_demo_session');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           parsed.profile = merged;
-          localStorage.setItem('autogo_demo_session', JSON.stringify(parsed));
+          sessionStorage.setItem('autogo_demo_session', JSON.stringify(parsed));
         } catch { /* ignore */ }
       }
     }

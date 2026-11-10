@@ -93,17 +93,39 @@ export function AppProvider({ children }) {
   // ── Verificar sessão ao iniciar ───────────────────────────
   useEffect(() => {
     let active = true;
+    const bootStart = Date.now();
+    const MIN_BOOT_MS = 850;
 
-    // 1. Verifica se já existe sessão mock salva para boot instantâneo
+    const finishLoading = () => {
+      const elapsed = Date.now() - bootStart;
+      const wait = Math.max(0, MIN_BOOT_MS - elapsed);
+      setTimeout(() => {
+        if (active) setLoading(false);
+      }, wait);
+    };
+
+    // Limpa chave antiga persistida no localStorage para não iniciar logado direto
     try {
-      const saved = localStorage.getItem('autogo_demo_session');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.user && parsed?.profile) {
-          setUser(parsed.user);
-          setProfile(parsed.profile);
-          setLoading(false);
-          return;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('autogo_demo_session');
+      }
+    } catch { /* ignore */ }
+
+    // 1. Verifica se existe sessão ativa na aba atual (sessionStorage com expiração de 10 min)
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const saved = sessionStorage.getItem('autogo_demo_session');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const validTtl = parsed?.ts && (Date.now() - parsed.ts < 10 * 60 * 1000);
+          if (validTtl && parsed?.user && parsed?.profile) {
+            setUser(parsed.user);
+            setProfile(parsed.profile);
+            finishLoading();
+            return;
+          } else {
+            sessionStorage.removeItem('autogo_demo_session');
+          }
         }
       }
     } catch {
@@ -119,14 +141,14 @@ export function AppProvider({ children }) {
           loadProfile(session.user.id);
           loadCartFromDb(session.user.id);
         }
-        setLoading(false);
+        finishLoading();
       })
       .catch((err) => {
         console.warn('Sessão offline / timeout:', err?.message || err);
         if (active) {
           setUser(null);
           setProfile(null);
-          setLoading(false);
+          finishLoading();
         }
       });
 
@@ -137,14 +159,13 @@ export function AppProvider({ children }) {
         loadCartFromDb(session.user.id);
       } else {
         // Só limpa se não for sessão demo ativa
-        const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('autogo_demo_session') : null;
+        const saved = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('autogo_demo_session') : null;
         if (!saved) {
           setUser(null);
           setProfile(null);
           setFavorites([]);
           if (typeof localStorage !== 'undefined') localStorage.removeItem('prfav');
         }
-        setLoading(false);
       }
     });
 
@@ -154,14 +175,21 @@ export function AppProvider({ children }) {
     };
   }, []);
 
-  // ── Login Direto com Conta Demo ───────────────────────────
-  const loginAsDemo = useCallback((role = 'client') => {
+  // ── Login Direto com Conta Demo (com tempo de autenticação realista) ──
+  const loginAsDemo = useCallback(async (role = 'client') => {
     const mockUser = MOCK_USERS[role] || MOCK_USERS.client;
+    // Simula tempo real de autenticação na tela de login antes de redirecionar
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('autogo_demo_session', JSON.stringify({
+        user: mockUser,
+        profile: mockUser.profile,
+        ts: Date.now(),
+      }));
+    }
     setUser(mockUser);
     setProfile(mockUser.profile);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('autogo_demo_session', JSON.stringify({ user: mockUser, profile: mockUser.profile }));
-    }
     const roleLabels = { client: 'Cliente', merchant: 'Comerciante', driver: 'Entregador' };
     setToasts(prev => [...prev, { id: Date.now(), msg: `Conectado como ${mockUser.profile.name} (${roleLabels[role] || role})!`, type: 'success' }]);
     return { user: mockUser, profile: mockUser.profile };
@@ -171,25 +199,48 @@ export function AppProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const demoRole = getDemoRoleByEmail(email);
     if (demoRole) {
-      return loginAsDemo(demoRole);
+      return await loginAsDemo(demoRole);
     }
+
+    const start = Date.now();
+    const MIN_LOGIN_MS = 1500;
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      const elapsed = Date.now() - start;
+      if (elapsed < MIN_LOGIN_MS) {
+        await new Promise(resolve => setTimeout(resolve, MIN_LOGIN_MS - elapsed));
+      }
       if (data?.user) {
+        if (data.user.profile && typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('autogo_demo_session', JSON.stringify({
+            user: data.user,
+            profile: data.user.profile,
+            ts: Date.now(),
+          }));
+          setProfile(data.user.profile);
+        }
         setUser(data.user);
         await loadProfile(data.user.id);
       }
       return data;
     } catch {
+      const elapsed = Date.now() - start;
+      if (elapsed < MIN_LOGIN_MS) {
+        await new Promise(resolve => setTimeout(resolve, MIN_LOGIN_MS - elapsed));
+      }
       // Fallback gracioso para modo apresentação offline
       const fallback = getFallbackMockUser(email);
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('autogo_demo_session', JSON.stringify({
+          user: fallback,
+          profile: fallback.profile,
+          ts: Date.now(),
+        }));
+      }
       setUser(fallback);
       setProfile(fallback.profile);
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('autogo_demo_session', JSON.stringify({ user: fallback, profile: fallback.profile }));
-      }
       return { user: fallback, profile: fallback.profile };
     }
   }, [loginAsDemo]);
@@ -197,6 +248,8 @@ export function AppProvider({ children }) {
   // ── Register ──────────────────────────────────────────────
   const register = useCallback(async ({ email, password, name, role, phone, cpf, storeName, cnpj, address, vehicleType }) => {
     const finalName = role === 'merchant' ? storeName : name;
+    const start = Date.now();
+    const MIN_REG_MS = 1500;
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -222,8 +275,16 @@ export function AppProvider({ children }) {
           p_cpf: cpf || '',
         });
       }
+      const elapsed = Date.now() - start;
+      if (elapsed < MIN_REG_MS) {
+        await new Promise(resolve => setTimeout(resolve, MIN_REG_MS - elapsed));
+      }
       return data;
     } catch {
+      const elapsed = Date.now() - start;
+      if (elapsed < MIN_REG_MS) {
+        await new Promise(resolve => setTimeout(resolve, MIN_REG_MS - elapsed));
+      }
       // Mock signup fallback
       const mockUser = {
         id: `usr-${Date.now()}`,
@@ -239,11 +300,15 @@ export function AppProvider({ children }) {
           cnpj: cnpj || '',
         },
       };
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('autogo_demo_session', JSON.stringify({
+          user: mockUser,
+          profile: mockUser.profile,
+          ts: Date.now(),
+        }));
+      }
       setUser(mockUser);
       setProfile(mockUser.profile);
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('autogo_demo_session', JSON.stringify({ user: mockUser, profile: mockUser.profile }));
-      }
       return { user: mockUser, profile: mockUser.profile };
     }
   }, []);
@@ -251,6 +316,9 @@ export function AppProvider({ children }) {
   // ── Logout ────────────────────────────────────────────────
   const logout = useCallback(async () => {
     try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('autogo_demo_session');
+    }
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('autogo_demo_session');
       localStorage.removeItem('prcart');

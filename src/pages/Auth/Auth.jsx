@@ -22,6 +22,7 @@ export default function Auth() {
   const [pwStr, setPwStr] = useState({ width: '0%', color: '#888', label: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoadingRole, setDemoLoadingRole] = useState('');
 
   // Campos compartilhados (login e cadastro)
   const [email, setEmail] = useState('');
@@ -109,21 +110,22 @@ export default function Auth() {
     if (m === 'register') { setRegStep(1); setUserType(''); }
   };
 
-  // ── Acesso rápido 1-clique para demonstração ──────────────────
-  const handleQuickDemoLogin = (role) => {
+  // ── Acesso rápido com tempo de autenticação realista ──────────
+  const handleQuickDemoLogin = async (role) => {
     setError('');
     setLoading(true);
+    setDemoLoadingRole(role);
     try {
-      const data = loginAsDemo(role);
+      const data = await loginAsDemo(role);
       const targetRole = data?.profile?.role || role;
-      setTimeout(() => {
-        if (targetRole === 'merchant') navigate('/merchant');
-        else if (targetRole === 'driver') navigate('/driver');
-        else navigate('/client');
-      }, 200);
+      if (targetRole === 'merchant') navigate('/merchant');
+      else if (targetRole === 'driver') navigate('/driver');
+      else navigate('/client');
     } catch (err) {
       setError('Erro ao iniciar demonstração: ' + err.message);
+    } finally {
       setLoading(false);
+      setDemoLoadingRole('');
     }
   };
 
@@ -298,63 +300,9 @@ export default function Auth() {
                 <button className="auth-tab" type="button" onClick={() => switchMode('register')}>Cadastrar</button>
               </div>
 
-              {/* ── SEÇÃO DE ACESSO RÁPIDO PARA APRESENTAÇÃO ── */}
-              <div className="demo-showcase-box">
-                <div className="demo-header">
-                  <div className="demo-header-badge">
-                    <i className="fa-solid fa-wand-magic-sparkles" /> Modo Apresentação
-                  </div>
-                  <span className="demo-header-hint">Clique para entrar direto em 1 segundo:</span>
-                </div>
-
-                <div className="demo-cards-row">
-                  {DEMO_ACCOUNTS.map((d) => (
-                    <div
-                      key={d.role}
-                      className="demo-card"
-                      style={{ '--role-color': d.color }}
-                    >
-                      <div className="demo-card-head">
-                        <div className="demo-card-icon">
-                          <i className={`fa-solid ${d.icon}`} />
-                        </div>
-                        <div className="demo-card-info">
-                          <strong>{d.label}</strong>
-                          <span className="demo-card-name">{d.name}</span>
-                        </div>
-                      </div>
-
-                      <p className="demo-card-desc">{d.desc}</p>
-
-                      <div className="demo-card-actions">
-                        <button
-                          type="button"
-                          className="btn-demo-quick"
-                          onClick={() => handleQuickDemoLogin(d.role)}
-                          disabled={loading}
-                          title={`Entrar diretamente como ${d.label}`}
-                        >
-                          <i className="fa-solid fa-arrow-right-to-bracket" /> Entrar
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-demo-fill"
-                          onClick={() => handleFillDemo(d)}
-                          title="Preencher no formulário abaixo"
-                        >
-                          Preencher
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="auth-divider">
-                <span>ou acesse com seu e-mail</span>
-              </div>
-
               <form onSubmit={handleLogin} className="auth-form">
+                <h3 className="form-title">Bem-vindo de volta!</h3>
+
                 <div className="form-group">
                   <label>E-mail</label>
                   <div className="input-wrap">
@@ -415,17 +363,68 @@ export default function Auth() {
                     <>Entrar na conta <i className="fa-solid fa-arrow-right" /></>
                   )}
                 </button>
-
-                <div className="auth-divider"><span>outras opções</span></div>
-                <div className="social-row">
-                  <button type="button" className="btn-social" onClick={() => handleQuickDemoLogin('client')}>
-                    <i className="fa-solid fa-user" /> Cliente Demo
-                  </button>
-                  <button type="button" className="btn-social" onClick={() => handleQuickDemoLogin('merchant')}>
-                    <i className="fa-solid fa-store" /> Loja Demo
-                  </button>
-                </div>
               </form>
+
+              <div className="auth-divider">
+                <span>contas para apresentação</span>
+              </div>
+
+              {/* ── SEÇÃO DE ACESSO PARA APRESENTAÇÃO ── */}
+              <div className="demo-showcase-box">
+                <div className="demo-header">
+                  <div className="demo-header-badge">
+                    <i className="fa-solid fa-wand-magic-sparkles" /> Modo Apresentação
+                  </div>
+                  <span className="demo-header-hint">Selecione um perfil para preencher ou entrar:</span>
+                </div>
+
+                <div className="demo-cards-row">
+                  {DEMO_ACCOUNTS.map((d) => (
+                    <div
+                      key={d.role}
+                      className="demo-card"
+                      style={{ '--role-color': d.color }}
+                    >
+                      <div className="demo-card-head">
+                        <div className="demo-card-icon">
+                          <i className={`fa-solid ${d.icon}`} />
+                        </div>
+                        <div className="demo-card-info">
+                          <strong>{d.label}</strong>
+                          <span className="demo-card-name">{d.name}</span>
+                        </div>
+                      </div>
+
+                      <p className="demo-card-desc">{d.desc}</p>
+
+                      <div className="demo-card-actions">
+                        <button
+                          type="button"
+                          className="btn-demo-fill"
+                          onClick={() => handleFillDemo(d)}
+                          disabled={loading}
+                          title="Preencher credenciais no formulário acima"
+                        >
+                          <i className="fa-solid fa-pen-to-square" /> Preencher dados
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-demo-quick"
+                          onClick={() => handleQuickDemoLogin(d.role)}
+                          disabled={loading}
+                          title={`Autenticar como ${d.label}`}
+                        >
+                          {demoLoadingRole === d.role ? (
+                            <><i className="fa-solid fa-spinner fa-spin" /> Entrando…</>
+                          ) : (
+                            <><i className="fa-solid fa-arrow-right-to-bracket" /> Entrar</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </>
           )}
 
