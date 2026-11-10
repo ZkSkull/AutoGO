@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase.js';
+import { mockDb } from '../../data/mockData';
 import { CATEGORIES, fmt } from '../../data';
 import './Home.css';
 import logo from '../../assets/images/logo-auto-go-branco.png';
@@ -23,7 +24,7 @@ const BRAND_COLORS = {
 
 export default function Home() {
   const navigate = useNavigate();
-  const { cartTotal } = useApp();
+  const { cartTotal, showToast } = useApp();
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState([]);
   const [stores, setStores] = useState([]);
@@ -76,14 +77,31 @@ export default function Home() {
       ]), QUERY_TIMEOUT);
       setStats({ products: prodCount || 0, stores: storeCount || 0 });
     } catch (err) {
-      console.error(err);
-      setLoadError(true);
+      console.warn('Fallback de dados na Home:', err?.message);
+      try {
+        const fallbackProds = mockDb.getProducts().slice(0, 8).map(p => ({ ...p, icon: p.icon_emoji || '🔩' }));
+        const fallbackStores = mockDb.getStores().slice(0, 4);
+        const fallbackBrands = [...new Set(mockDb.getProducts().map(p => p.brand).filter(Boolean))].slice(0, 12);
+        setProducts(fallbackProds);
+        setStores(fallbackStores);
+        setBrands(fallbackBrands);
+        setStats({ products: mockDb.getProducts().length, stores: mockDb.getStores().length });
+        setLoadError(false);
+      } catch {
+        setLoadError(true);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const doSearch = () => { if (search.trim()) navigate(`/client?search=${encodeURIComponent(search)}`); };
+  const doSearch = () => {
+    if (!search.trim()) {
+      showToast('Digite o nome de uma peça, marca ou veículo para pesquisar.', 'info');
+      return;
+    }
+    navigate(`/client?search=${encodeURIComponent(search.trim())}`);
+  };
 
   return (
     <div className="home-page">
@@ -100,13 +118,21 @@ export default function Home() {
             <h1 className="hero-title">Encontre autopeças<br /><span className="accent">em minutos</span></h1>
             <p className="hero-sub">Compare preços, escolha a loja e receba de forma rápida.</p>
             <div className="hero-search-row">
-              <input
-                type="text"
-                placeholder="Buscar peça, marca ou modelo do veículo…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && doSearch()}
-              />
+              <div className="hero-search-box">
+                <i className="fa-solid fa-magnifying-glass" />
+                <input
+                  type="text"
+                  placeholder="Buscar peça, marca ou modelo do veículo…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && doSearch()}
+                />
+                {search && (
+                  <button type="button" className="hero-search-clear" onClick={() => setSearch('')} aria-label="Limpar busca">
+                    <i className="fa-solid fa-xmark" />
+                  </button>
+                )}
+              </div>
 
               <button className="btn btn-primary" onClick={doSearch}>
                 <i className="fa-solid fa-magnifying-glass" /> Buscar

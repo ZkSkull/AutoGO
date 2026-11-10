@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../../components/PageLayout';
 import { supabase } from '../../lib/supabase.js';
+import { mockDb } from '../../data/mockData';
 import { fmt } from '../../data';
 import './Lojas.css';
 
@@ -12,6 +13,7 @@ export default function Lojas() {
 
   const [stores,    setStores]    = useState([]);
   const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState('');
   const [selected,  setSelected]  = useState(null);
   const [search,     setSearch]     = useState('');
   const [onlyOpen,   setOnlyOpen]   = useState(false);
@@ -32,15 +34,20 @@ export default function Lojas() {
 
   const loadStores = async () => {
     setLoading(true);
+    setError('');
     try {
-      const { data, error } = await supabase
+      const { data, error: err } = await supabase
         .from('stores')
         .select('*, owner:profiles(name)')
         .order('rating', { ascending: false });
-      if (error) throw error;
-      setStores(data || []);
-    } catch (err) {
-      console.error(err);
+      if (err) throw err;
+      setStores(data && data.length ? data : mockDb.getStores());
+    } catch {
+      try {
+        setStores(mockDb.getStores());
+      } catch {
+        setError('Não foi possível carregar a lista de lojas.');
+      }
     } finally {
       setLoading(false);
     }
@@ -57,7 +64,7 @@ export default function Lojas() {
         .eq('is_active', true)
         .order('rating', { ascending: false })
         .limit(4);
-      setStoreProducts(prods || []);
+      setStoreProducts(prods && prods.length ? prods : mockDb.getProducts({ storeId }).slice(0, 4));
 
       // Avaliações da loja
       const { data: revs } = await supabase
@@ -66,9 +73,10 @@ export default function Lojas() {
         .eq('store_id', storeId)
         .order('created_at', { ascending: false })
         .limit(3);
-      setStoreReviews(revs || []);
-    } catch (err) {
-      console.error(err);
+      setStoreReviews(revs && revs.length ? revs : mockDb.getStoreReviews(storeId).slice(0, 3));
+    } catch {
+      setStoreProducts(mockDb.getProducts({ storeId }).slice(0, 4));
+      setStoreReviews(mockDb.getStoreReviews(storeId).slice(0, 3));
     } finally {
       setDetailLoading(false);
     }
@@ -100,15 +108,16 @@ export default function Lojas() {
 
           {/* Toolbar */}
           <div className="lojas-toolbar">
-            <div className="lojas-search">
+            <div className="search-bar-std">
               <i className="fa-solid fa-magnifying-glass" />
               <input
+                type="text"
                 placeholder="Buscar por nome, categoria ou endereço…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
               {search && (
-                <button style={{background:'none',border:'none',cursor:'pointer',color:'var(--gray-400)'}} onClick={() => setSearch('')}>
+                <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca">
                   <i className="fa-solid fa-xmark" />
                 </button>
               )}
@@ -122,6 +131,13 @@ export default function Lojas() {
               <span><i className="fa-solid fa-circle" style={{color:'var(--green)',fontSize:'.6rem'}} /> {stores.filter(s=>s.is_open).length} abertas</span>
             </div>
           </div>
+
+          {error && (
+            <div className="error-banner">
+              <span className="error-banner-msg"><i className="fa-solid fa-triangle-exclamation" /> {error}</span>
+              <button className="btn btn-outline btn-sm" onClick={loadStores}>Tentar novamente</button>
+            </div>
+          )}
 
           {/* Layout */}
           <div className={`lojas-layout${selected ? ' has-detail' : ''}`}>

@@ -36,14 +36,56 @@
 }
 .hero-title .accent { color: var(--red); }
 .hero-sub { color: rgba(255,255,255,.6); font-size: 1.05rem; margin-bottom: 2rem; max-width: 480px; line-height: 1.6; }
-.hero-search-row { display: flex; gap: .5rem; margin-bottom: 1.2rem; }
-.hero-search-row input {
-  flex: 1; padding: .9rem 1.2rem;
-  border-radius: var(--radius); border: 2px solid var(--gray-700);
-  background: var(--gray-800); color: #fff; font-size: 1rem;
-  outline: none; transition: border-color var(--transition);
+.hero-search-row { display: flex; gap: .6rem; margin-bottom: 1.2rem; align-items: stretch; flex-wrap: wrap; }
+.hero-search-box {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .75rem 1.1rem;
+  border-radius: var(--radius);
+  border: 2px solid var(--gray-700);
+  background: var(--gray-800);
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
-.hero-search-row input:focus { border-color: var(--red); }
+.hero-search-box:focus-within {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(225,26,44,.2);
+}
+.hero-search-box > i {
+  color: var(--gray-400);
+  font-size: .95rem;
+  flex-shrink: 0;
+  transition: color var(--transition);
+}
+.hero-search-box:focus-within > i { color: var(--red); }
+.hero-search-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  outline: none;
+  width: 100%;
+}
+.hero-search-box input::placeholder { color: var(--gray-400); }
+.hero-search-clear {
+  background: rgba(255,255,255,.1);
+  border: none;
+  color: var(--gray-300);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .78rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+.hero-search-clear:hover { background: var(--red); color: #fff; }
 
 /* ── HERO CTA (BOTÃO EXTRA) ── */
 .hero-cta {

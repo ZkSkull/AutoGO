@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import ProductCard from '../../components/ProductCard';
 import Pagination from '../../components/Pagination';
 
-const CATS       = ['Tudo','Motor','Freios','Suspensão','Elétrica','Filtros','Transmissão','Arrefecimento'];
+const CATS       = ['Tudo','Motor','Freios','Suspensão','Elétrica','Filtros','Transmissão','Arrefecimento','Acessórios'];
 const ALL_BRANDS = ['Bosch','TRW','Monroe','Heliar','Gates','NGK','Mahle','Brembo','Cofap','Modine','Magneti','Wega','Nakata','Dayco','Valeo'];
 const CONDITIONS = [{ val:'all',label:'Todos' },{ val:'new',label:'Novo' },{ val:'reman',label:'Remanufaturado' },{ val:'used',label:'Usado' }];
 const RATINGS    = [{ val:0,label:'Todas' },{ val:4.5,label:'4.5+ ★' },{ val:4,label:'4.0+ ★' },{ val:3,label:'3.0+ ★' }];
@@ -111,9 +111,10 @@ function ListProductCard({ product:p, onOpen, onAdd, onFav, isFav, showToast }) 
 import { fmt } from '../../data';
 
 export default function ClientShop({
-  products, prodLoading, filters, onFilterChange, onClearFilters,
+  products, prodLoading, prodError, onRetryProducts,
+  filters, onFilterChange, onClearFilters,
   sort, onSortChange, viewMode, onViewModeChange, cat, onCatChange,
-  search, onOpenProduct,
+  search, onSearchChange, onOpenProduct,
   filterPanelOpen, onToggleFilterPanel, onAdd, onFav, favorites, showToast,
   pageSize = 24,
 }) {
@@ -139,11 +140,31 @@ export default function ClientShop({
 
   return (
     <div>
+      {prodError && (
+        <div className="error-banner">
+          <span className="error-banner-msg"><i className="fa-solid fa-triangle-exclamation" /> {prodError}</span>
+          {onRetryProducts && <button className="btn btn-outline btn-sm" onClick={onRetryProducts}>Tentar novamente</button>}
+        </div>
+      )}
       <div className="cat-strip">
         {CATS.map(c=><button key={c} className={`cat-pill${cat===c?' active':''}`} onClick={()=>onCatChange(c)}>{c}</button>)}
       </div>
       <div className="shop-toolbar">
         <div className="shop-toolbar-left">
+          <div className="search-bar-std" style={{ maxWidth: 340 }}>
+            <i className="fa-solid fa-magnifying-glass" />
+            <input
+              type="text"
+              placeholder="Buscar peça, marca ou veículo…"
+              value={search || ''}
+              onChange={e => onSearchChange && onSearchChange(e.target.value)}
+            />
+            {search && (
+              <button type="button" onClick={() => onSearchChange && onSearchChange('')} aria-label="Limpar busca">
+                <i className="fa-solid fa-xmark" />
+              </button>
+            )}
+          </div>
           <button className={`filter-toggle-btn${activeFilterCount>0?' has-filters':''}`} onClick={()=>onToggleFilterPanel()}>
             <i className="fa-solid fa-sliders" /> Filtros
             {activeFilterCount>0&&<span className="toolbar-filter-count">{activeFilterCount}</span>}

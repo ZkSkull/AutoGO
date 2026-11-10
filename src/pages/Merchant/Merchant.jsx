@@ -47,6 +47,7 @@ export default function Merchant() {
   const [orders,      setOrders]      = useState([]);
   const [orderLoading,setOrderLoading]= useState(false);
   const [orderFilter, setOrderFilter] = useState('all');
+  const [searchOrder, setSearchOrder] = useState('');
   const [orderModal,  setOrderModal]  = useState(null);
   const [newOrderCount, setNewOrderCount] = useState(0);
 
@@ -128,32 +129,45 @@ export default function Merchant() {
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     if (!store) return;
+    if (!form.name?.trim() || !form.brand?.trim()) {
+      showToast('Preencha o nome e a marca do produto.', 'error');
+      return;
+    }
+    const priceNum = parseFloat(form.price);
+    const stockNum = parseInt(form.stock, 10);
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
+      showToast('Informe um preço válido maior que zero.', 'error');
+      return;
+    }
+    if (!Number.isFinite(stockNum) || stockNum < 0) {
+      showToast('Informe uma quantidade em estoque válida.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
         store_id:      store.id,
-        name:          form.name,
-        brand:         form.brand,
-        category_id:   null, // simplificado
-        code:          form.code,
-        price:         parseFloat(form.price),
-        stock:         parseInt(form.stock),
-        condition:     form.condition,
-        description:   form.description,
-        compatibility: form.compat,
+        name:          form.name.trim(),
+        brand:         form.brand.trim(),
+        category:      form.category || 'Motor',
+        category_id:   null,
+        code:          form.code?.trim() || '',
+        price:         priceNum,
+        stock:         stockNum,
+        condition:     form.condition || 'new',
+        description:   form.description || '',
+        compatibility: form.compat || '',
         icon_emoji:    form.icon_emoji || '🔩',
         is_active:     true,
       };
 
       if (editId) {
-        const { error } = await supabase.from('products').update(payload).eq('id', editId);
-        if (error) throw error;
+        await productsApi.update(editId, payload);
         setProducts(prev => prev.map(p => p.id === editId ? { ...p, ...payload } : p));
         showToast('Produto atualizado!', 'success');
       } else {
-        const { data, error } = await supabase.from('products').insert(payload).select().single();
-        if (error) throw error;
-        setProducts(prev => [data, ...prev]);
+        const created = await productsApi.create(store.id, payload);
+        setProducts(prev => [created, ...prev]);
         showToast('Produto adicionado!', 'success');
       }
       setShowForm(false); setEditId(null); setForm(EMPTY_FORM);
@@ -164,7 +178,7 @@ export default function Merchant() {
 
   const handleDeleteProduct = async (id) => {
     try {
-      await supabase.from('products').update({ is_active: false }).eq('id', id);
+      await productsApi.remove(id);
       setProducts(prev => prev.filter(p => p.id !== id));
       setConfirmDelete(null);
       showToast('Produto removido.', 'info');
@@ -246,6 +260,10 @@ export default function Merchant() {
   const handleSaveStore = async (e) => {
     e.preventDefault();
     if (!store) return;
+    if (!storeForm.name || !storeForm.name.trim()) {
+      showToast('O nome da loja é obrigatório.', 'error');
+      return;
+    }
     try {
       // Geocoding best-effort quando só o endereço mudou
       const addressChanged = storeForm.address !== store.address;
@@ -266,8 +284,18 @@ export default function Merchant() {
   const todayRevenue= todayOrders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + (o.total || 0), 0);
   const preparing   = orders.filter(o => o.status === 'preparing').length;
   const avgRating   = reviews.length ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : '—';
-  const filteredOrders = orderFilter === 'all' ? orders : orders.filter(o => o.status === orderFilter);
-  const filteredProducts = products.filter(p => !searchProd || p.name.toLowerCase().includes(searchProd.toLowerCase()) || (p.brand || '').toLowerCase().includes(searchProd.toLowerCase()));
+  const filteredOrders = orders
+    .filter(o => orderFilter === 'all' || o.status === orderFilter)
+    .filter(o => {
+      if (!searchOrder.trim()) return true;
+      const q = searchOrder.toLowerCase();
+      return (
+        (o.order_number || o.id || '').toLowerCase().includes(q) ||
+        (o.client?.name || '').toLowerCase().includes(q) ||
+        (o.items || []).some(it => (it.product_name || '').toLowerCase().includes(q))
+      );
+    });
+  const filteredProducts = products.filter(p => !searchProd || p.name.toLowerCase().includes(searchProd.toLowerCase()) || (p.brand || '').toLowerCase().includes(searchProd.toLowerCase()) || (p.code || '').toLowerCase().includes(searchProd.toLowerCase()));
 
   const storeName = store?.name || profile?.name || 'Minha Loja';
 
@@ -434,14 +462,30 @@ export default function Merchant() {
             <div>
               <div className="page-header-row">
                 <h2>Pedidos {newOrderCount > 0 && <span className="new-badge">{newOrderCount} novo{newOrderCount > 1 ? 's' : ''}</span>}</h2>
-                <select value={orderFilter} onChange={e => setOrderFilter(e.target.value)} className="filter-select">
-                  <option value="all">Todos</option>
-                  <option value="pending">Aguardando</option>
-                  <option value="preparing">Em preparo</option>
-                  <option value="shipped">Enviado</option>
-                  <option value="delivered">Entregue</option>
-                  <option value="cancelled">Cancelado</option>
-                </select>
+                <div style={{ display: 'flex', gap: '.7rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div className="search-bar-std" style={{ maxWidth: 300 }}>
+                    <i className="fa-solid fa-magnifying-glass" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por #pedido, cliente ou item…"
+                      value={searchOrder}
+                      onChange={e => setSearchOrder(e.target.value)}
+                    />
+                    {searchOrder && (
+                      <button type="button" onClick={() => setSearchOrder('')} aria-label="Limpar busca">
+                        <i className="fa-solid fa-xmark" />
+                      </button>
+                    )}
+                  </div>
+                  <select value={orderFilter} onChange={e => setOrderFilter(e.target.value)} className="filter-select">
+                    <option value="all">Todos</option>
+                    <option value="pending">Aguardando</option>
+                    <option value="preparing">Em preparo</option>
+                    <option value="shipped">Enviado</option>
+                    <option value="delivered">Entregue</option>
+                    <option value="cancelled">Cancelado</option>
+                  </select>
+                </div>
               </div>
 
               {orderLoading

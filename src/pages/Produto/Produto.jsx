@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import PageLayout from '../../components/PageLayout';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase.js';
+import { mockDb } from '../../data/mockData';
 import { fmt } from '../../data';
 import './Produto.css';
 
@@ -31,14 +32,15 @@ export default function Produto() {
     setNotFound(false);
     try {
       // Buscar produto pelo ID
-      const { data, error } = await supabase
+      const { data: rawData, error } = await supabase
         .from('products')
         .select('*, store:stores(id, name, rating, total_reviews, is_open, address, phone)')
         .eq('id', id)
         .eq('is_active', true)
         .single();
 
-      if (error || !data) { setNotFound(true); return; }
+      const data = (!error && rawData) ? rawData : mockDb.getProductById(id);
+      if (!data) { setNotFound(true); return; }
 
       // Normalizar campos
       const normalized = {
@@ -59,7 +61,8 @@ export default function Produto() {
         .neq('id', id)
         .limit(4);
 
-      setRelated((rel || []).map(p => ({ ...p, icon: p.icon_emoji || '🔩', compat: p.compatibility || '' })));
+      const relList = rel && rel.length ? rel : mockDb.getProducts({ category: data.category }).filter(p => p.id !== id).slice(0, 4);
+      setRelated((relList || []).map(p => ({ ...p, icon: p.icon_emoji || '🔩', compat: p.compatibility || '' })));
 
       // Buscar avaliações da loja
       if (data.store_id) {
@@ -69,17 +72,33 @@ export default function Produto() {
           .eq('store_id', data.store_id)
           .order('created_at', { ascending: false })
           .limit(5);
-        setReviews(revs || []);
+        setReviews(revs && revs.length ? revs : mockDb.getStoreReviews(data.store_id).slice(0, 5));
       }
-    } catch (err) {
-      console.error(err);
-      setNotFound(true);
+    } catch {
+      const fallback = mockDb.getProductById(id);
+      if (fallback) {
+        setProduct({
+          ...fallback,
+          icon: fallback.icon_emoji || '🔩',
+          compat: fallback.compatibility || '',
+          badge: fallback.badge || '',
+          storeId: fallback.store_id,
+        });
+        setRelated(mockDb.getProducts({ category: fallback.category }).filter(p => p.id !== id).slice(0, 4).map(p => ({ ...p, icon: p.icon_emoji || '🔩', compat: p.compatibility || '' })));
+        if (fallback.store_id) setReviews(mockDb.getStoreReviews(fallback.store_id).slice(0, 5));
+      } else {
+        setNotFound(true);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleAddCart = () => {
+    if (!product || product.stock <= 0) {
+      showToast('Este produto está indisponível em estoque no momento.', 'error');
+      return;
+    }
     for (let i = 0; i < qty; i++) addToCart(product);
     showToast(`${product.name} adicionado ao carrinho!`, 'success');
   };

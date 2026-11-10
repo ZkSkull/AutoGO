@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../../components/PageLayout';
 import { supabase } from '../../lib/supabase.js';
+import { mockDb } from '../../data/mockData';
 import { fmt } from '../../data';
 import './Marcas.css';
 
@@ -30,6 +31,7 @@ export default function Marcas() {
 
   const [brands,      setBrands]      = useState([]);
   const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState('');
   const [selected,    setSelected]    = useState(null);
   const [catFilter,   setCatFilter]   = useState('Todas');
   const [search,      setSearch]      = useState('');
@@ -45,34 +47,40 @@ export default function Marcas() {
     else setBrandProds([]);
   }, [selected]);
 
+  const buildBrandsList = (rows) => {
+    const brandMap = {};
+    (rows || []).forEach(p => {
+      if (!p?.brand) return;
+      if (!brandMap[p.brand]) {
+        brandMap[p.brand] = { name: p.brand, count: 0, categories: new Set() };
+      }
+      brandMap[p.brand].count++;
+      if (p.category) brandMap[p.brand].categories.add(p.category);
+    });
+    return Object.values(brandMap).map(b => ({
+      ...b,
+      categories: Array.from(b.categories),
+    })).sort((a, b) => b.count - a.count);
+  };
+
   const loadBrands = async () => {
     setLoading(true);
+    setError('');
     try {
-      const { data, error } = await supabase
+      const { data, error: err } = await supabase
         .from('products')
         .select('brand, category')
         .eq('is_active', true);
 
-      if (error) throw error;
-
-      // Agrupar por marca
-      const brandMap = {};
-      (data || []).forEach(p => {
-        if (!brandMap[p.brand]) {
-          brandMap[p.brand] = { name: p.brand, count: 0, categories: new Set() };
-        }
-        brandMap[p.brand].count++;
-        brandMap[p.brand].categories.add(p.category);
-      });
-
-      const list = Object.values(brandMap).map(b => ({
-        ...b,
-        categories: Array.from(b.categories),
-      })).sort((a, b) => b.count - a.count);
-
-      setBrands(list);
-    } catch (err) {
-      console.error(err);
+      if (err) throw err;
+      const rows = data && data.length ? data : mockDb.getProducts();
+      setBrands(buildBrandsList(rows));
+    } catch {
+      try {
+        setBrands(buildBrandsList(mockDb.getProducts()));
+      } catch {
+        setError('Não foi possível carregar as marcas no momento.');
+      }
     } finally {
       setLoading(false);
     }
@@ -81,20 +89,26 @@ export default function Marcas() {
   const loadBrandProducts = async (brandName) => {
     setProdLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error: err } = await supabase
         .from('products')
         .select('*, store:stores(name)')
         .eq('brand', brandName)
         .eq('is_active', true)
         .order('price', { ascending: true });
-      if (error) throw error;
-      setBrandProds((data || []).map(p => ({
+      if (err) throw err;
+      const list = data && data.length ? data : mockDb.getProducts().filter(p => p.brand === brandName);
+      setBrandProds((list || []).map(p => ({
         ...p,
         icon:   p.icon_emoji || '🔩',
         compat: p.compatibility || '',
       })));
-    } catch (err) {
-      console.error(err);
+    } catch {
+      const fallback = mockDb.getProducts().filter(p => p.brand === brandName);
+      setBrandProds((fallback || []).map(p => ({
+        ...p,
+        icon:   p.icon_emoji || '🔩',
+        compat: p.compatibility || '',
+      })));
     } finally {
       setProdLoading(false);
     }
@@ -121,24 +135,33 @@ export default function Marcas() {
         <div className="container">
 
           {/* Toolbar */}
-          <div style={{display:'flex',gap:'1rem',marginBottom:'1.5rem',flexWrap:'wrap',alignItems:'center'}}>
-            <div className="lojas-search" style={{flex:1,minWidth:200}}>
+          <div style={{display:'flex',gap:'1rem',marginBottom:'1.5rem',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between'}}>
+            <div className="search-bar-std">
               <i className="fa-solid fa-magnifying-glass" />
               <input
+                type="text"
                 placeholder="Buscar marca…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
               {search && (
-                <button style={{background:'none',border:'none',cursor:'pointer',color:'var(--gray-400)'}} onClick={() => setSearch('')}>
+                <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca">
                   <i className="fa-solid fa-xmark" />
                 </button>
               )}
             </div>
-            <span style={{fontSize:'.85rem',color:'var(--gray-400)',whiteSpace:'nowrap'}}>
+            <span style={{fontSize:'.85rem',color:'var(--gray-500)',fontWeight:500,whiteSpace:'nowrap'}}>
+              <i className="fa-solid fa-certificate" style={{color:'var(--red)',marginRight:'.35rem'}} />
               {filtered.length} marca{filtered.length !== 1 ? 's' : ''}
             </span>
           </div>
+
+          {error && (
+            <div className="error-banner">
+              <span className="error-banner-msg"><i className="fa-solid fa-triangle-exclamation" /> {error}</span>
+              <button className="btn btn-outline btn-sm" onClick={loadBrands}>Tentar novamente</button>
+            </div>
+          )}
 
           {/* Category filter */}
           <div className="marcas-cat-strip">

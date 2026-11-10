@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../../components/PageLayout';
 import { supabase } from '../../lib/supabase.js';
+import { mockDb } from '../../data/mockData';
 import { fmt } from '../../data';
 import './Categorias.css';
 
 const CAT_DETAILS = {
-  'Motor':         { icon: 'fa-engine',           color: '#E11A2C', desc: 'Peças para o coração do seu veículo — velas, correias, juntas e muito mais.' },
+  'Motor':         { icon: 'fa-gauge-high',        color: '#E11A2C', desc: 'Peças para o coração do seu veículo — velas, correias, juntas e muito mais.' },
   'Freios':        { icon: 'fa-circle-stop',       color: '#1A1A1A', desc: 'Pastilhas, discos, tambores e fluidos para a segurança na frenagem.' },
   'Suspensão':     { icon: 'fa-car-burst',         color: '#3B82F6', desc: 'Amortecedores, molas, coxins e pivôs para conforto e estabilidade.' },
   'Elétrica':      { icon: 'fa-bolt',              color: '#EAB308', desc: 'Baterias, alternadores, sensores e cabos elétricos originais.' },
@@ -21,6 +22,8 @@ export default function Categorias() {
 
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState('');
+  const [search,      setSearch]      = useState('');
   const [selected,    setSelected]    = useState(null);
   const [catProducts, setCatProducts] = useState([]);
   const [prodLoading, setProdLoading] = useState(false);
@@ -36,22 +39,22 @@ export default function Categorias() {
 
   const loadCategories = async () => {
     setLoading(true);
+    setError('');
     try {
       // Buscar contagem de produtos por categoria
-      const { data, error } = await supabase
+      const { data, error: err } = await supabase
         .from('products')
         .select('category')
         .eq('is_active', true);
 
-      if (error) throw error;
+      if (err) throw err;
 
-      // Contar por categoria
+      const list = data && data.length ? data : mockDb.getProducts();
       const countMap = {};
-      (data || []).forEach(p => {
+      list.forEach(p => {
         countMap[p.category] = (countMap[p.category] || 0) + 1;
       });
 
-      // Montar lista de categorias únicas
       const cats = Object.keys(CAT_DETAILS).map(name => ({
         name,
         ...CAT_DETAILS[name],
@@ -59,11 +62,19 @@ export default function Categorias() {
       }));
       setCategories(cats);
     } catch {
-      // Fallback com categorias padrão
-      const cats = Object.keys(CAT_DETAILS).map(name => ({
-        name, ...CAT_DETAILS[name], count: 0,
-      }));
-      setCategories(cats);
+      try {
+        const list = mockDb.getProducts();
+        const countMap = {};
+        list.forEach(p => {
+          countMap[p.category] = (countMap[p.category] || 0) + 1;
+        });
+        const cats = Object.keys(CAT_DETAILS).map(name => ({
+          name, ...CAT_DETAILS[name], count: countMap[name] || 0,
+        }));
+        setCategories(cats);
+      } catch {
+        setError('Não foi possível carregar as categorias no momento.');
+      }
     } finally {
       setLoading(false);
     }
@@ -72,24 +83,36 @@ export default function Categorias() {
   const loadCatProducts = async (catName) => {
     setProdLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error: err } = await supabase
         .from('products')
         .select('*, store:stores(name)')
         .eq('category', catName)
         .eq('is_active', true)
         .order('rating', { ascending: false });
-      if (error) throw error;
-      setCatProducts((data || []).map(p => ({
+      if (err) throw err;
+      const list = data && data.length ? data : mockDb.getProducts({ category: catName });
+      setCatProducts((list || []).map(p => ({
         ...p,
         icon:   p.icon_emoji || '🔩',
         compat: p.compatibility || '',
       })));
-    } catch (err) {
-      console.error(err);
+    } catch {
+      const fallback = mockDb.getProducts({ category: catName });
+      setCatProducts((fallback || []).map(p => ({
+        ...p,
+        icon:   p.icon_emoji || '🔩',
+        compat: p.compatibility || '',
+      })));
     } finally {
       setProdLoading(false);
     }
   };
+
+  const filteredCategories = categories.filter(cat =>
+    !search.trim() ||
+    cat.name.toLowerCase().includes(search.toLowerCase()) ||
+    cat.desc.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <PageLayout
@@ -105,15 +128,49 @@ export default function Categorias() {
       {/* Grid de categorias */}
       <section className="section">
         <div className="container">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+            <div className="search-bar-std">
+              <i className="fa-solid fa-magnifying-glass" />
+              <input
+                type="text"
+                placeholder="Pesquisar categoria ou tipo de peça…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              {search && (
+                <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca">
+                  <i className="fa-solid fa-xmark" />
+                </button>
+              )}
+            </div>
+            <span style={{ fontSize: '.88rem', color: 'var(--gray-500)', fontWeight: 500 }}>
+              <i className="fa-solid fa-layer-group" style={{ color: 'var(--red)', marginRight: '.35rem' }} />
+              {filteredCategories.length} categoria{filteredCategories.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {error && (
+            <div className="error-banner">
+              <span className="error-banner-msg"><i className="fa-solid fa-triangle-exclamation" /> {error}</span>
+              <button className="btn btn-outline btn-sm" onClick={loadCategories}>Tentar novamente</button>
+            </div>
+          )}
+
           {loading ? (
             <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'1rem'}}>
               {[1,2,3,4,5,6,7,8].map(i => (
                 <div key={i} style={{height:90,background:'var(--gray-200)',borderRadius:'var(--radius-lg)',animation:'pulse 1.5s infinite'}} />
               ))}
             </div>
+          ) : filteredCategories.length === 0 ? (
+            <div className="empty-state">
+              <i className="fa-solid fa-layer-group" />
+              <p>Nenhuma categoria encontrada para "{search}".</p>
+              <button className="btn btn-outline" onClick={() => setSearch('')}>Limpar busca</button>
+            </div>
           ) : (
             <div className="cat-page-grid">
-              {categories.map(cat => {
+              {filteredCategories.map(cat => {
                 const isActive = selected === cat.name;
                 return (
                   <div

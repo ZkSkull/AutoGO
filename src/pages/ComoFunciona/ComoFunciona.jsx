@@ -73,7 +73,7 @@ export default function ComoFunciona() {
         <div className="page-hero-inner container">
           <div className="page-hero-eyebrow"><i className="fa-solid fa-circle-question" /> Como Funciona</div>
           <h1 className="page-hero-title">Simples,<br /><span>Rápido e Seguro</span></h1>
-          <p className="page-hero-sub">Entenda como a PeçaRápida funciona para clientes, lojistas e entregadores.</p>
+          <p className="page-hero-sub">Entenda como a AutoGO funciona para clientes, lojistas e entregadores.</p>
           <div className="page-hero-glyph"><i className="fa-solid fa-bolt" /></div>
         </div>
       }

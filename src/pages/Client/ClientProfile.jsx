@@ -90,7 +90,7 @@ function VehicleForm({ show, onClose, onSave }) {
 export default function ClientProfile({
   user, profileForm, setProfileForm, profSaving, saveProfile,
   addresses, addrLoading, loadAddresses, removeAddress,
-  vehicles, showToast,
+  vehicles, loadVehicles, showToast,
 }) {
   const [addrForm, setAddrForm] = useState(false);
   const [vehForm, setVehForm] = useState(false);
@@ -106,6 +106,7 @@ export default function ClientProfile({
   const handleAddVehicle = async (data) => {
     try {
       await vehiclesApi.create(user.id, data);
+      if (loadVehicles) loadVehicles();
       showToast('Veículo adicionado!', 'success');
     } catch (err) { showToast('Erro: '+err.message, 'error'); }
   };

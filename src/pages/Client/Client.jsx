@@ -5,6 +5,7 @@ import Modal from '../../components/Modal';
 import PriceComparison from '../../components/PriceComparison';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
+import { mockDb } from '../../data/mockData';
 import { profilesApi, addressesApi, vehiclesApi, ordersApi, reviewsApi } from '../../lib/api';
 import { fmt, statusLabel } from '../../data';
 import useSupabaseQuery from '../../lib/useSupabaseQuery';
@@ -57,15 +58,15 @@ export default function Client() {
 
   const realtimeChannel = useRef(null);
 
-  const { data: products, loading: prodLoading } = useSupabaseQuery(
+  const { data: products, loading: prodLoading, error: prodError, refetch: refetchProducts } = useSupabaseQuery(
     () => supabase
       .from('products')
       .select('*, store:stores(id, name, rating, is_open)')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
-        if (error) throw error;
-        return (data || []).map(p => ({
+        const list = (!error && data && data.length) ? data : mockDb.getProducts();
+        return (list || []).map(p => ({
           ...p, icon: p.icon_emoji || '🔩',
           compat: p.compatibility || '', code: p.code || '',
           badge: p.badge || '', storeId: p.store_id,
@@ -138,8 +139,14 @@ export default function Client() {
   const total     = subtotal+freight-discount;
 
   const applyCoupon = () => {
-    if (coupon.toUpperCase()==='PECAS10') { setDiscount(subtotal*.1); showToast('Cupom aplicado! 10% de desconto.','success'); }
-    else showToast('Cupom inválido.','error');
+    const code = coupon.trim().toUpperCase();
+    if (!code) { showToast('Digite um código de cupom para aplicar.', 'info'); return; }
+    if (code === 'PECAS10' || code === 'AUTOGO10') {
+      setDiscount(subtotal * 0.1);
+      showToast('Cupom aplicado! 10% de desconto.', 'success');
+    } else {
+      showToast('Cupom inválido ou expirado. Tente PECAS10.', 'error');
+    }
   };
 
   const confirmOrder = async () => {
@@ -184,7 +191,12 @@ export default function Client() {
   };
 
   const saveProfile = async (e) => {
-    e.preventDefault(); setProfSaving(true);
+    e.preventDefault();
+    if (!profileForm.name || !profileForm.name.trim()) {
+      showToast('Por favor, informe seu nome completo.', 'error');
+      return;
+    }
+    setProfSaving(true);
     try {
       await profilesApi.update(user.id, profileForm);
       showToast('Perfil atualizado!', 'success');
@@ -207,9 +219,9 @@ export default function Client() {
         <header className="topbar">
           <button className="topbar-burger" onClick={()=>setSidebarOpen(v=>!v)}><i className="fa-solid fa-bars" /></button>
           <div className="topbar-search">
-            <i className="fa-solid fa-magnifying-glass" style={{color:'var(--gray-400)'}} />
-            <input placeholder="Buscar peça, marca, veículo…" value={search} onChange={e=>setSearch(e.target.value)} />
-            {search&&<button style={{background:'none',border:'none',cursor:'pointer',color:'var(--gray-400)'}} onClick={()=>setSearch('')}><i className="fa-solid fa-xmark" /></button>}
+            <i className="fa-solid fa-magnifying-glass" />
+            <input type="text" placeholder="Buscar peça, marca, veículo…" value={search} onChange={e=>setSearch(e.target.value)} />
+            {search&&<button type="button" onClick={()=>setSearch('')} aria-label="Limpar busca"><i className="fa-solid fa-xmark" /></button>}
           </div>
           <div className="topbar-actions">
             <button className="topbar-btn" onClick={()=>setPage('cart')}><i className="fa-solid fa-cart-shopping" />{cartTotal>0&&<span className="notif-dot" />}</button>
@@ -219,7 +231,7 @@ export default function Client() {
         <div className="page-content fade-in">
           {page==='shop' && (
             <ClientShop
-              products={products||[]} prodLoading={prodLoading}
+              products={products||[]} prodLoading={prodLoading} prodError={prodError} onRetryProducts={refetchProducts}
               filters={filters} onFilterChange={handleFilterChange} onClearFilters={clearFilters}
               sort={sort} onSortChange={setSort}
               viewMode={viewMode} onViewModeChange={setViewMode}
@@ -255,7 +267,7 @@ export default function Client() {
               user={user} profile={profile} profileForm={profileForm} setProfileForm={setProfileForm}
               profSaving={profSaving} saveProfile={saveProfile}
               addresses={addresses} addrLoading={addrLoading} loadAddresses={loadAddresses} removeAddress={removeAddress}
-              vehicles={vehicles} showToast={showToast}
+              vehicles={vehicles} loadVehicles={loadVehicles} showToast={showToast}
             />
           )}
         </div>

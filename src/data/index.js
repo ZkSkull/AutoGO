@@ -9,7 +9,7 @@ export const fmt = (n) => {
 export const statusLabel = (s) => ({ pending:'Aguardando', preparing:'Em preparo', shipped:'Enviado', delivered:'Entregue', cancelled:'Cancelado', available:'Disponível', collecting:'Coletando', delivering:'Em rota' }[s] || s);
 
 export const CATEGORIES = [
-  { label: 'Motor',        icon: 'fa-solid fa-engine'           },
+  { label: 'Motor',        icon: 'fa-solid fa-gauge-high'       },
   { label: 'Freios',       icon: 'fa-solid fa-circle-stop'      },
   { label: 'Suspensão',    icon: 'fa-solid fa-car-burst'        },
   { label: 'Elétrica',     icon: 'fa-solid fa-bolt'             },

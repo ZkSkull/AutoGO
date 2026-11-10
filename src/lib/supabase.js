@@ -60,7 +60,7 @@ function resolveMockTable(table, state) {
     list = [...mockDb.reviews];
   } else if (table === 'categories') {
     list = [
-      { name: 'Motor', slug: 'motor', icon: 'fa-solid fa-engine' },
+      { name: 'Motor', slug: 'motor', icon: 'fa-solid fa-gauge-high' },
       { name: 'Freios', slug: 'freios', icon: 'fa-solid fa-circle-stop' },
       { name: 'Suspensão', slug: 'suspensao', icon: 'fa-solid fa-car-burst' },
       { name: 'Elétrica', slug: 'eletrica', icon: 'fa-solid fa-bolt' },

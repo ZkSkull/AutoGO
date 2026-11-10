@@ -69,10 +69,13 @@ export default function Driver() {
   const [activeDelivery, setActiveDelivery]= useState(null);
   const [selectedRouteOrder, setSelectedRouteOrder] = useState(null);
 
-  // Modals
+  // Modals & Filters
   const [acceptModal,    setAcceptModal]   = useState(null);
   const [detailModal,    setDetailModal]   = useState(null);
   const [withdrawModal,  setWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount]= useState('');
+  const [withdrawPixKey, setWithdrawPixKey]= useState('');
+  const [searchDeliv,    setSearchDeliv]   = useState('');
   const [timerPct,       setTimerPct]      = useState(100);
   const [accepting,      setAccepting]     = useState(false);
   const [profileForm,    setProfileForm]   = useState({});
@@ -221,6 +224,10 @@ export default function Driver() {
 
   const saveProfile = async (e) => {
     e.preventDefault();
+    if (!profileForm.name?.trim()) {
+      showToast('Informe seu nome completo.', 'error');
+      return;
+    }
     setProfSaving(true);
     try {
       await profilesApi.update(user.id, profileForm);
@@ -388,9 +395,24 @@ export default function Driver() {
           {/* ══ DELIVERIES ══════════════════════════════════ */}
           {page==='deliveries'&&(
             <div>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.2rem',flexWrap:'wrap',gap:'1rem'}}>
                 <h2 style={{fontFamily:'var(--font-head)',fontSize:'1.8rem',fontWeight:900}}>Minhas Entregas & Rotas</h2>
-                <button className="btn btn-outline btn-sm" onClick={loadMyDeliveries}><i className="fa-solid fa-rotate" /> Atualizar</button>
+                <div style={{display:'flex',alignItems:'center',gap:'.7rem',flexWrap:'wrap'}}>
+                  <div className="search-bar-std" style={{maxWidth:300}}>
+                    <i className="fa-solid fa-magnifying-glass search-icon" />
+                    <input
+                      value={searchDeliv}
+                      onChange={e=>setSearchDeliv(e.target.value)}
+                      placeholder="Buscar entrega, loja ou cliente…"
+                    />
+                    {searchDeliv&&(
+                      <button type="button" className="clear-btn" onClick={()=>setSearchDeliv('')}>
+                        <i className="fa-solid fa-xmark" />
+                      </button>
+                    )}
+                  </div>
+                  <button className="btn btn-outline btn-sm" onClick={loadMyDeliveries}><i className="fa-solid fa-rotate" /> Atualizar</button>
+                </div>
               </div>
 
               {/* Mapa interativo da entrega selecionada */}
@@ -426,11 +448,13 @@ export default function Driver() {
 
               {myLoading?(
                 <div style={{textAlign:'center',padding:'3rem'}}><i className="fa-solid fa-spinner fa-spin" style={{fontSize:'2rem',color:'var(--red)'}} /></div>
-              ):myDeliveries.length===0?(
-                <div className="empty-state"><i className="fa-solid fa-route" /><p>Nenhuma entrega ainda.</p></div>
+              ):myDeliveries.filter(d => !searchDeliv.trim() || [d.order_number, d.id, d.store?.name, d.client?.name, d.address?.street, d.address?.city].some(v => (v||'').toLowerCase().includes(searchDeliv.toLowerCase()))).length===0?(
+                <div className="empty-state"><i className="fa-solid fa-route" /><p>Nenhuma entrega encontrada.</p></div>
               ):(
                 <div style={{display:'flex',flexDirection:'column',gap:'1rem'}}>
-                  {myDeliveries.map(d=>{
+                  {myDeliveries
+                    .filter(d => !searchDeliv.trim() || [d.order_number, d.id, d.store?.name, d.client?.name, d.address?.street, d.address?.city].some(v => (v||'').toLowerCase().includes(searchDeliv.toLowerCase())))
+                    .map(d=>{
                     const isSelectedOnMap = (selectedRouteOrder?.id || activeDelivery?.id || myDeliveries[0]?.id) === d.id;
                     return (
                       <div key={d.id} className="dash-card" style={{display:'flex',alignItems:'center',gap:'1rem',flexWrap:'wrap',border:isSelectedOnMap?'2px solid var(--red)':undefined}}>
@@ -518,7 +542,15 @@ export default function Driver() {
               <h2 style={{fontFamily:'var(--font-head)',fontSize:'1.8rem',fontWeight:900,marginBottom:'1.5rem'}}>Ganhos</h2>
               <div className="driver-balance-card">
                 <div><p style={{color:'rgba(255,255,255,.6)',fontSize:'.9rem'}}>Saldo disponível</p><h2 style={{fontFamily:'var(--font-head)',fontSize:'2.8rem',fontWeight:900}}>{fmt(driverData?.balance||0)}</h2></div>
-                <button className="btn" style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'2px solid rgba(255,255,255,.3)'}} onClick={()=>setWithdrawModal(true)}>
+                <button className="btn" style={{background:'rgba(255,255,255,.15)',color:'#fff',border:'2px solid rgba(255,255,255,.3)'}} onClick={()=>{
+                  if ((driverData?.balance||0) <= 0) {
+                    showToast('Você não possui saldo disponível para saque.', 'error');
+                    return;
+                  }
+                  setWithdrawAmount((driverData?.balance||0).toFixed(2));
+                  setWithdrawPixKey(profile?.cpf || user?.email || '');
+                  setWithdrawModal(true);
+                }}>
                   <i className="fa-solid fa-money-bill-transfer" /> Sacar
                 </button>
               </div>
@@ -669,12 +701,33 @@ export default function Driver() {
       {withdrawModal&&(
         <Modal open title="Solicitar Saque" onClose={()=>setWithdrawModal(false)}>
           <p style={{color:'var(--gray-500)',marginBottom:'1rem',fontSize:'.9rem'}}>Saldo disponível: <strong style={{color:'var(--green)'}}>{fmt(driverData?.balance||0)}</strong></p>
-          <div className="form-group"><label>Valor a sacar</label><input type="number" step="0.01" defaultValue={(driverData?.balance||0).toFixed(2)} /></div>
-          <div className="form-group"><label>Chave Pix</label><input placeholder="CPF, e-mail ou telefone" /></div>
+          <div className="form-group">
+            <label>Valor a sacar *</label>
+            <input type="number" step="0.01" min="0.01" max={driverData?.balance||0} value={withdrawAmount} onChange={e=>setWithdrawAmount(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>Chave Pix *</label>
+            <input value={withdrawPixKey} onChange={e=>setWithdrawPixKey(e.target.value)} placeholder="CPF, e-mail ou telefone" />
+          </div>
           <button className="btn btn-primary btn-full" onClick={async()=>{
+            const val = Number(withdrawAmount);
+            const currentBalance = Number(driverData?.balance || 0);
+            if (!val || val <= 0) {
+              showToast('Informe um valor válido para saque.', 'error');
+              return;
+            }
+            if (val > currentBalance) {
+              showToast('O valor solicitado excede seu saldo disponível.', 'error');
+              return;
+            }
+            if (!withdrawPixKey?.trim()) {
+              showToast('Informe uma chave Pix válida para receber o saque.', 'error');
+              return;
+            }
             try {
-              await driversApi.updateDriver(user.id, { balance: 0 });
-              setDriverData(prev=>({...prev,balance:0}));
+              const newBalance = Math.max(0, Number((currentBalance - val).toFixed(2)));
+              await driversApi.updateDriver(user.id, { balance: newBalance });
+              setDriverData(prev=>({...prev, balance: newBalance}));
               setWithdrawModal(false);
               showToast('Saque solicitado! Chegará em até 2 dias úteis.','success');
             } catch(err){ showToast('Erro: '+err.message,'error'); }

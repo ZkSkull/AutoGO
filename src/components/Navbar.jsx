@@ -86,7 +86,7 @@ export default function Navbar({ transparent = false }) {
             {user ? (
               <>
                 <button className="btn btn-primary navbar-btn-sm" onClick={handleDashboard}>
-                  <i className="fa-solid fa-grid-2" /> Painel
+                  <i className="fa-solid fa-gauge-high" /> Painel
                 </button>
                 <button className="btn btn-outline navbar-btn-sm" onClick={logout} title="Sair da conta">
                   <i className="fa-solid fa-right-from-bracket" /> Sair
@@ -138,7 +138,7 @@ export default function Navbar({ transparent = false }) {
                       setMobileOpen(false);
                     }}
                   >
-                    <i className="fa-solid fa-grid-2" /> Ir para o Painel
+                    <i className="fa-solid fa-gauge-high" /> Ir para o Painel
                   </button>
                   <button
                     className="btn btn-outline btn-full"
