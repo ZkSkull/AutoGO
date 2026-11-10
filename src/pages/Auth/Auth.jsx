@@ -117,6 +117,7 @@ export default function Auth() {
     setDemoLoadingRole(role);
     try {
       const data = await loginAsDemo(role);
+      showToast('Login realizado com sucesso!', 'success');
       const targetRole = data?.profile?.role || role;
       if (targetRole === 'merchant') navigate('/merchant');
       else if (targetRole === 'driver') navigate('/driver');
@@ -391,7 +392,7 @@ export default function Auth() {
                         </div>
                         <div className="demo-card-info">
                           <strong>{d.label}</strong>
-                          <span className="demo-card-name">{d.name}</span>
+                          <span className="demo-card-name">{d.email}</span>
                         </div>
                       </div>
 

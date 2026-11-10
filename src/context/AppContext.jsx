@@ -104,35 +104,17 @@ export function AppProvider({ children }) {
       }, wait);
     };
 
-    // Limpa chave antiga persistida no localStorage para não iniciar logado direto
+    // Limpa sessões demo anteriores ao abrir/recarregar o site para nunca iniciar já conectado
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem('autogo_demo_session');
       }
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('autogo_demo_session');
+      }
     } catch { /* ignore */ }
 
-    // 1. Verifica se existe sessão ativa na aba atual (sessionStorage com expiração de 10 min)
-    try {
-      if (typeof sessionStorage !== 'undefined') {
-        const saved = sessionStorage.getItem('autogo_demo_session');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          const validTtl = parsed?.ts && (Date.now() - parsed.ts < 10 * 60 * 1000);
-          if (validTtl && parsed?.user && parsed?.profile) {
-            setUser(parsed.user);
-            setProfile(parsed.profile);
-            finishLoading();
-            return;
-          } else {
-            sessionStorage.removeItem('autogo_demo_session');
-          }
-        }
-      }
-    } catch {
-      /* segue checagem padrão */
-    }
-
-    // 2. Checagem padrão do Supabase com timeout seguro
+    // Checagem padrão do Supabase com timeout seguro
     withTimeout(supabase.auth.getSession(), CONN_TIMEOUT)
       .then(({ data: { session } }) => {
         if (!active) return;
@@ -190,8 +172,6 @@ export function AppProvider({ children }) {
     }
     setUser(mockUser);
     setProfile(mockUser.profile);
-    const roleLabels = { client: 'Cliente', merchant: 'Comerciante', driver: 'Entregador' };
-    setToasts(prev => [...prev, { id: Date.now(), msg: `Conectado como ${mockUser.profile.name} (${roleLabels[role] || role})!`, type: 'success' }]);
     return { user: mockUser, profile: mockUser.profile };
   }, []);
 
@@ -371,9 +351,9 @@ export function AppProvider({ children }) {
 
   // ── Toasts ────────────────────────────────────────────────
   const showToast = useCallback((msg, type = 'info') => {
-    const id = Date.now();
+    const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, msg, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 2500);
   }, []);
 
   // ── Favoritos ─────────────────────────────────────────────
