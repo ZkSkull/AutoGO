@@ -23,6 +23,31 @@ const NAV = [
 const STATUS_LABEL = { pending:'Aguardando', preparing:'Em preparo', shipped:'Enviado', delivering:'Em rota', delivered:'Entregue', cancelled:'Cancelado' };
 const sl = s => STATUS_LABEL[s] || s;
 
+const getOrderRouteCoords = (order) => {
+  const originLat = order?.store?.lat ?? -23.6128;
+  const originLng = order?.store?.lng ?? -46.6682;
+  const destLat = order?.address?.lat ?? -23.5615;
+  const destLng = order?.address?.lng ?? -46.6560;
+  return {
+    origin: {
+      lat: originLat,
+      lng: originLng,
+      label: order?.store?.name || 'Loja AutoGO',
+    },
+    destination: {
+      lat: destLat,
+      lng: destLng,
+      label: order?.address?.street
+        ? `${order.address.street}${order.address.number ? `, ${order.address.number}` : ''} — ${order.address.city || 'São Paulo'}`
+        : 'Endereço de Entrega',
+    },
+    driverPosition: {
+      lat: Number(((originLat + destLat) / 2).toFixed(5)),
+      lng: Number(((originLng + destLng) / 2).toFixed(5)),
+    },
+  };
+};
+
 export default function Driver() {
   const { user, profile, showToast } = useApp();
 
@@ -42,6 +67,7 @@ export default function Driver() {
   const [myDeliveries,   setMyDeliveries]  = useState([]);
   const [myLoading,      setMyLoading]     = useState(false);
   const [activeDelivery, setActiveDelivery]= useState(null);
+  const [selectedRouteOrder, setSelectedRouteOrder] = useState(null);
 
   // Modals
   const [acceptModal,    setAcceptModal]   = useState(null);
@@ -256,45 +282,72 @@ export default function Driver() {
                 ))}
               </div>
 
-              {/* Entrega ativa */}
-              {activeDelivery&&(
-                <div className="dash-card" style={{marginBottom:'1rem',border:'2px solid var(--red)'}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
-                    <div>
-                      <h3 style={{fontFamily:'var(--font-head)',fontWeight:700}}>Entrega Ativa</h3>
-                      <span style={{fontSize:'.83rem',color:'var(--gray-400)'}}>{activeDelivery.order_number}</span>
+              {/* Entrega ativa ou Mapa de Rotas */}
+              {activeDelivery ? (() => {
+                const coords = getOrderRouteCoords(activeDelivery);
+                return (
+                  <div className="dash-card" style={{marginBottom:'1rem',border:'2px solid var(--red)'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+                      <div>
+                        <h3 style={{fontFamily:'var(--font-head)',fontWeight:700}}>Entrega Ativa</h3>
+                        <span style={{fontSize:'.83rem',color:'var(--gray-400)'}}>{activeDelivery.order_number || activeDelivery.id}</span>
+                      </div>
+                      <span className={`status-badge status-${activeDelivery.status}`}>{sl(activeDelivery.status)}</span>
                     </div>
-                    <span className={`status-badge status-${activeDelivery.status}`}>{sl(activeDelivery.status)}</span>
-                  </div>
-                  <div style={{display:'flex',gap:'1rem',flexWrap:'wrap',fontSize:'.88rem',color:'var(--gray-600)',marginBottom:'1rem'}}>
-                    <span><i className="fa-solid fa-store" style={{color:'var(--red)'}} /> {activeDelivery.store?.name||'—'}</span>
-                    <span><i className="fa-solid fa-location-dot" style={{color:'var(--red)'}} /> {activeDelivery.address?.street||'—'}{activeDelivery.address?.number?`, ${activeDelivery.address.number}`:''}</span>
-                    <span><i className="fa-solid fa-user" style={{color:'var(--red)'}} /> {activeDelivery.client?.name||'—'}</span>
-                    <span><i className="fa-solid fa-phone" style={{color:'var(--red)'}} /> {activeDelivery.client?.phone||'—'}</span>
-                  </div>
-                  <MapView
-                    mode="driver"
-                    origin={{ lat: -23.5505, lng: -46.6333, label: activeDelivery.store?.name || 'Loja' }}
-                    destination={{ lat: -23.5610, lng: -46.6560, label: `${activeDelivery.address?.street || ''}, ${activeDelivery.address?.city || ''}` }}
-                    eta="~25 min"
-                  />
-                  <div style={{display:'flex',gap:'.7rem',flexWrap:'wrap',marginTop:'1rem'}}>
-                    {activeDelivery.status==='shipped'&&(
-                      <button className="btn btn-primary" onClick={()=>updateDeliveryStatus(activeDelivery.id,'delivering')}>
-                        <i className="fa-solid fa-box-open" /> Confirmar coleta
+                    <div style={{display:'flex',gap:'1rem',flexWrap:'wrap',fontSize:'.88rem',color:'var(--gray-600)',marginBottom:'1rem'}}>
+                      <span><i className="fa-solid fa-store" style={{color:'var(--red)'}} /> {activeDelivery.store?.name||'—'}</span>
+                      <span><i className="fa-solid fa-location-dot" style={{color:'var(--red)'}} /> {activeDelivery.address?.street||'—'}{activeDelivery.address?.number?`, ${activeDelivery.address.number}`:''}</span>
+                      <span><i className="fa-solid fa-user" style={{color:'var(--red)'}} /> {activeDelivery.client?.name||'—'}</span>
+                      <span><i className="fa-solid fa-phone" style={{color:'var(--red)'}} /> {activeDelivery.client?.phone||'—'}</span>
+                    </div>
+                    <MapView
+                      mode="driver"
+                      origin={coords.origin}
+                      destination={coords.destination}
+                      driverPosition={coords.driverPosition}
+                      eta="~22 min"
+                    />
+                    <div style={{display:'flex',gap:'.7rem',flexWrap:'wrap',marginTop:'1rem'}}>
+                      {activeDelivery.status==='shipped'&&(
+                        <button className="btn btn-primary" onClick={()=>updateDeliveryStatus(activeDelivery.id,'delivering')}>
+                          <i className="fa-solid fa-box-open" /> Confirmar coleta
+                        </button>
+                      )}
+                      {activeDelivery.status==='delivering'&&(
+                        <button className="btn btn-primary" onClick={()=>updateDeliveryStatus(activeDelivery.id,'delivered')}>
+                          <i className="fa-solid fa-circle-check" /> Confirmar entrega
+                        </button>
+                      )}
+                      <button className="btn btn-outline" onClick={()=>setDetailModal(activeDelivery)}>
+                        <i className="fa-solid fa-info-circle" /> Detalhes
                       </button>
-                    )}
-                    {activeDelivery.status==='delivering'&&(
-                      <button className="btn btn-primary" onClick={()=>updateDeliveryStatus(activeDelivery.id,'delivered')}>
-                        <i className="fa-solid fa-circle-check" /> Confirmar entrega
-                      </button>
-                    )}
-                    <button className="btn btn-outline" onClick={()=>setDetailModal(activeDelivery)}>
-                      <i className="fa-solid fa-info-circle" /> Detalhes
-                    </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })() : (() => {
+                const previewOrder = queue[0] || myDeliveries[0];
+                const coords = getOrderRouteCoords(previewOrder);
+                return (
+                  <div className="dash-card" style={{marginBottom:'1rem'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+                      <div>
+                        <h3 style={{fontFamily:'var(--font-head)',fontWeight:700}}>Mapa de Rotas na Região</h3>
+                        <span style={{fontSize:'.83rem',color:'var(--gray-400)'}}>
+                          {previewOrder ? `Prévia da rota: ${previewOrder.order_number || previewOrder.id}` : 'Rotas em tempo real (OpenStreetMap / OSRM)'}
+                        </span>
+                      </div>
+                      <span className="status-badge status-delivering"><i className="fa-solid fa-satellite-dish" /> GPS Ativo</span>
+                    </div>
+                    <MapView
+                      mode="driver"
+                      origin={coords.origin}
+                      destination={coords.destination}
+                      driverPosition={coords.driverPosition}
+                      eta="~18 min"
+                    />
+                  </div>
+                );
+              })()}
 
               {/* Fila de entregas disponíveis */}
               <div className="dash-card">
@@ -336,36 +389,76 @@ export default function Driver() {
           {page==='deliveries'&&(
             <div>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem'}}>
-                <h2 style={{fontFamily:'var(--font-head)',fontSize:'1.8rem',fontWeight:900}}>Minhas Entregas</h2>
+                <h2 style={{fontFamily:'var(--font-head)',fontSize:'1.8rem',fontWeight:900}}>Minhas Entregas & Rotas</h2>
                 <button className="btn btn-outline btn-sm" onClick={loadMyDeliveries}><i className="fa-solid fa-rotate" /> Atualizar</button>
               </div>
+
+              {/* Mapa interativo da entrega selecionada */}
+              {(() => {
+                const mapOrder = selectedRouteOrder || activeDelivery || myDeliveries[0] || queue[0];
+                const coords = getOrderRouteCoords(mapOrder);
+                return (
+                  <div className="dash-card" style={{marginBottom:'1.2rem'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.9rem',flexWrap:'wrap',gap:'.5rem'}}>
+                      <div>
+                        <h3 style={{fontFamily:'var(--font-head)',fontWeight:700}}>
+                          <i className="fa-solid fa-route" style={{color:'var(--red)',marginRight:'.4rem'}} />
+                          Rota de Entrega {mapOrder ? `— ${mapOrder.order_number || mapOrder.id}` : ''}
+                        </h3>
+                        <span style={{fontSize:'.82rem',color:'var(--gray-400)'}}>
+                          {coords.origin.label} → {coords.destination.label}
+                        </span>
+                      </div>
+                      {mapOrder && (
+                        <span className={`status-badge status-${mapOrder.status}`}>{sl(mapOrder.status)}</span>
+                      )}
+                    </div>
+                    <MapView
+                      mode="driver"
+                      origin={coords.origin}
+                      destination={coords.destination}
+                      driverPosition={coords.driverPosition}
+                      eta="~22 min"
+                    />
+                  </div>
+                );
+              })()}
+
               {myLoading?(
                 <div style={{textAlign:'center',padding:'3rem'}}><i className="fa-solid fa-spinner fa-spin" style={{fontSize:'2rem',color:'var(--red)'}} /></div>
               ):myDeliveries.length===0?(
                 <div className="empty-state"><i className="fa-solid fa-route" /><p>Nenhuma entrega ainda.</p></div>
               ):(
                 <div style={{display:'flex',flexDirection:'column',gap:'1rem'}}>
-                  {myDeliveries.map(d=>(
-                    <div key={d.id} className="dash-card" style={{display:'flex',alignItems:'center',gap:'1rem',flexWrap:'wrap'}}>
-                      <div style={{flex:1}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'.6rem',marginBottom:'.4rem'}}>
-                          <strong>{d.order_number}</strong>
-                          <span className={`status-badge status-${d.status}`}>{sl(d.status)}</span>
+                  {myDeliveries.map(d=>{
+                    const isSelectedOnMap = (selectedRouteOrder?.id || activeDelivery?.id || myDeliveries[0]?.id) === d.id;
+                    return (
+                      <div key={d.id} className="dash-card" style={{display:'flex',alignItems:'center',gap:'1rem',flexWrap:'wrap',border:isSelectedOnMap?'2px solid var(--red)':undefined}}>
+                        <div style={{flex:1}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'.6rem',marginBottom:'.4rem'}}>
+                            <strong>{d.order_number || d.id}</strong>
+                            <span className={`status-badge status-${d.status}`}>{sl(d.status)}</span>
+                          </div>
+                          <div style={{fontSize:'.83rem',color:'var(--gray-400)'}}>
+                            <i className="fa-solid fa-store" /> {d.store?.name||'—'} · <i className="fa-solid fa-user" /> {d.client?.name||'—'}
+                          </div>
+                          <div style={{fontSize:'.83rem',color:'var(--gray-400)',marginTop:'.2rem'}}>
+                            {d.items?.map(i=>`${i.product_name} x${i.quantity}`).join(', ')}
+                          </div>
                         </div>
-                        <div style={{fontSize:'.83rem',color:'var(--gray-400)'}}>
-                          <i className="fa-solid fa-store" /> {d.store?.name||'—'} · <i className="fa-solid fa-user" /> {d.client?.name||'—'}
-                        </div>
-                        <div style={{fontSize:'.83rem',color:'var(--gray-400)',marginTop:'.2rem'}}>
-                          {d.items?.map(i=>`${i.product_name} x${i.quantity}`).join(', ')}
+                        <div style={{textAlign:'right'}}>
+                          <div style={{fontFamily:'var(--font-head)',fontWeight:900,color:'var(--green)'}}>{fmt((d.freight||8.90)*.7)}</div>
+                          <div style={{fontSize:'.75rem',color:'var(--gray-400)'}}>{new Date(d.created_at).toLocaleDateString('pt-BR')}</div>
+                          <div style={{display:'flex',gap:'.4rem',marginTop:'.4rem',justifyContent:'flex-end'}}>
+                            <button className="btn btn-primary btn-sm" onClick={()=>setSelectedRouteOrder(d)}>
+                              <i className="fa-solid fa-map-location-dot" /> Ver Rota
+                            </button>
+                            <button className="btn btn-outline btn-sm" onClick={()=>setDetailModal(d)}>Detalhes</button>
+                          </div>
                         </div>
                       </div>
-                      <div style={{textAlign:'right'}}>
-                        <div style={{fontFamily:'var(--font-head)',fontWeight:900,color:'var(--green)'}}>{fmt((d.freight||8.90)*.7)}</div>
-                        <div style={{fontSize:'.75rem',color:'var(--gray-400)'}}>{new Date(d.created_at).toLocaleDateString('pt-BR')}</div>
-                        <button className="btn btn-outline btn-sm" style={{marginTop:'.4rem'}} onClick={()=>setDetailModal(d)}>Detalhes</button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -534,7 +627,7 @@ export default function Driver() {
 
       {/* DETAIL MODAL */}
       {detailModal&&(
-        <Modal open title={`Detalhes — ${detailModal.order_number}`} onClose={()=>setDetailModal(null)}>
+        <Modal open title={`Detalhes — ${detailModal.order_number || detailModal.id}`} onClose={()=>setDetailModal(null)}>
           <div style={{display:'flex',flexDirection:'column',gap:'.6rem'}}>
             {[
               ['Status',  sl(detailModal.status)],
@@ -553,6 +646,20 @@ export default function Driver() {
             <div style={{marginTop:'.5rem'}}>
               <strong style={{fontSize:'.9rem'}}>Itens:</strong>
               {detailModal.items?.map((it,i)=><div key={i} style={{fontSize:'.85rem',color:'var(--gray-600)',marginTop:'.3rem'}}>• {it.product_name} x{it.quantity}</div>)}
+            </div>
+            <div style={{marginTop:'.8rem'}}>
+              {(() => {
+                const coords = getOrderRouteCoords(detailModal);
+                return (
+                  <MapView
+                    mode="driver"
+                    origin={coords.origin}
+                    destination={coords.destination}
+                    driverPosition={coords.driverPosition}
+                    eta="~22 min"
+                  />
+                );
+              })()}
             </div>
           </div>
         </Modal>

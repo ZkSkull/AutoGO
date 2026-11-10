@@ -10,7 +10,6 @@ const NAV_LINKS = [
   { label: 'Lojas',         path: '/lojas'         },
   { label: 'Marcas',        path: '/marcas'        },
   { label: 'Como Funciona', path: '/como-funciona' },
-  { label: 'Entregador',    path: '/driver'        },
 ];
 
 export default function Navbar({ transparent = false }) {

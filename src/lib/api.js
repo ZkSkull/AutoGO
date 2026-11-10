@@ -672,6 +672,7 @@ export const driversApi = {
   },
 
   async updateDriver(driverId, updates) {
+    mockDb.updateDriverData(driverId, updates);
     try {
       await supabase
         .from('drivers')

@@ -1,7 +1,7 @@
 // ─── DADOS MOCKADOS PARA APRESENTAÇÃO E DEMONSTRAÇÃO ──────────────────────────
 // Permite apresentar o AutoGO de forma 100% funcional offline ou sem dependência do backend.
 
-const STORAGE_KEY = 'autogo_mock_db_v1';
+const STORAGE_KEY = 'autogo_mock_db_v2';
 
 // ── Usuários Demo ─────────────────────────────────────────────────────────────
 export const MOCK_USERS = {
@@ -421,6 +421,7 @@ export const INITIAL_PRODUCTS = [
 export const INITIAL_ORDERS = [
   {
     id: 'ord-101',
+    order_number: '#PED-1042',
     client_id: 'usr-client-demo',
     store_id: 'store-bandeirantes-01',
     address_id: 'addr-01',
@@ -433,10 +434,10 @@ export const INITIAL_ORDERS = [
     payment_method: 'credit',
     status: 'shipped',
     created_at: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-    store: { name: 'Auto Peças Bandeirantes', phone: '(11) 3322-4455', address: 'Av. dos Bandeirantes, 2400 — São Paulo, SP' },
+    store: { name: 'Auto Peças Bandeirantes', phone: '(11) 3322-4455', address: 'Av. dos Bandeirantes, 2400 — São Paulo, SP', city: 'São Paulo', lat: -23.6128, lng: -46.6682 },
     client: { name: 'João Silva', phone: '(11) 98765-4321' },
     driver: { name: 'Lucas Motta', phone: '(11) 91234-5678', vehicle: 'Honda CG 160 Fan - Placa AUT-7G21' },
-    address: { street: 'Av. Paulista', number: '1000', complement: 'Apto 82', city: 'São Paulo', state: 'SP' },
+    address: { street: 'Av. Paulista', number: '1000', complement: 'Apto 82', city: 'São Paulo', state: 'SP', lat: -23.5615, lng: -46.6560 },
     items: [
       { product_name: 'Pastilha de Freio Dianteira Cerâmica Bosch', quantity: 1, product_price: 189.90, subtotal: 189.90 },
       { product_name: 'Disco de Freio Dianteiro Ventilado Fremax', quantity: 2, product_price: 245.00, subtotal: 490.00 },
@@ -444,23 +445,24 @@ export const INITIAL_ORDERS = [
   },
   {
     id: 'ord-102',
+    order_number: '#PED-1041',
     client_id: 'usr-client-demo',
     store_id: 'store-hiper-02',
     address_id: 'addr-01',
     driver_id: 'usr-driver-demo',
     subtotal: 230.10,
-    freight: 0,
+    freight: 14.00,
     discount: 0,
-    total: 230.10,
+    total: 244.10,
     delivery_type: 'standard',
     payment_method: 'pix',
     status: 'delivered',
     created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
     delivered_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 + 45 * 60 * 1000).toISOString(),
-    store: { name: 'Hiper Peças Centro', phone: '(11) 3105-8890', address: 'Rua Barão de Campinas, 320 — São Paulo, SP' },
+    store: { name: 'Hiper Peças Centro', phone: '(11) 3105-8890', address: 'Rua Barão de Campinas, 320 — São Paulo, SP', city: 'São Paulo', lat: -23.5382, lng: -46.6461 },
     client: { name: 'João Silva', phone: '(11) 98765-4321' },
     driver: { name: 'Lucas Motta', phone: '(11) 91234-5678' },
-    address: { street: 'Av. Paulista', number: '1000', city: 'São Paulo', state: 'SP' },
+    address: { street: 'Av. Paulista', number: '1000', city: 'São Paulo', state: 'SP', lat: -23.5615, lng: -46.6560 },
     items: [
       { product_name: 'Óleo Sintético 5W-30 Castrol Magnatec 1L', quantity: 4, product_price: 48.90, subtotal: 195.60 },
       { product_name: 'Filtro de Óleo Blindado Mann Filter', quantity: 1, product_price: 34.50, subtotal: 34.50 },
@@ -468,6 +470,7 @@ export const INITIAL_ORDERS = [
   },
   {
     id: 'ord-103',
+    order_number: '#PED-1043',
     client_id: 'usr-client-02',
     store_id: 'store-bandeirantes-01',
     address_id: 'addr-ext-01',
@@ -480,9 +483,9 @@ export const INITIAL_ORDERS = [
     payment_method: 'credit',
     status: 'preparing',
     created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    store: { name: 'Auto Peças Bandeirantes', phone: '(11) 3322-4455', address: 'Av. dos Bandeirantes, 2400 — São Paulo, SP', city: 'São Paulo' },
+    store: { name: 'Auto Peças Bandeirantes', phone: '(11) 3322-4455', address: 'Av. dos Bandeirantes, 2400 — São Paulo, SP', city: 'São Paulo', lat: -23.6128, lng: -46.6682 },
     client: { name: 'Mariana Souza', phone: '(11) 98822-3344' },
-    address: { street: 'Rua Oscar Freire', number: '820', city: 'São Paulo', state: 'SP' },
+    address: { street: 'Rua Oscar Freire', number: '820', city: 'São Paulo', state: 'SP', lat: -23.5629, lng: -46.6698 },
     items: [
       { product_name: 'Kit Correia Dentada + Tensor Gates', quantity: 1, product_price: 178.00, subtotal: 178.00 },
       { product_name: 'Jogo de Velas de Ignição Iridium NGK', quantity: 1, product_price: 265.00, subtotal: 265.00 },
@@ -490,6 +493,7 @@ export const INITIAL_ORDERS = [
   },
   {
     id: 'ord-104',
+    order_number: '#PED-1044',
     client_id: 'usr-client-03',
     store_id: 'store-bandeirantes-01',
     address_id: 'addr-ext-02',
@@ -500,17 +504,18 @@ export const INITIAL_ORDERS = [
     total: 635.00,
     delivery_type: 'express',
     payment_method: 'pix',
-    status: 'pending',
+    status: 'preparing',
     created_at: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
-    store: { name: 'Auto Peças Bandeirantes', phone: '(11) 3322-4455', address: 'Av. dos Bandeirantes, 2400 — São Paulo, SP' },
+    store: { name: 'Auto Peças Bandeirantes', phone: '(11) 3322-4455', address: 'Av. dos Bandeirantes, 2400 — São Paulo, SP', city: 'São Paulo', lat: -23.6128, lng: -46.6682 },
     client: { name: 'Roberto Fernandes', phone: '(11) 97711-2233' },
-    address: { street: 'Rua Domingos de Morais', number: '1420', city: 'São Paulo', state: 'SP' },
+    address: { street: 'Rua Domingos de Morais', number: '1420', city: 'São Paulo', state: 'SP', lat: -23.5912, lng: -46.6368 },
     items: [
       { product_name: 'Amortecedor Dianteiro Turbogás Cofap', quantity: 2, product_price: 310.00, subtotal: 620.00 },
     ],
   },
   {
     id: 'ord-105',
+    order_number: '#PED-1039',
     client_id: 'usr-client-04',
     store_id: 'store-bandeirantes-01',
     address_id: 'addr-ext-03',
@@ -523,17 +528,18 @@ export const INITIAL_ORDERS = [
     payment_method: 'credit',
     status: 'delivered',
     created_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    delivered_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    store: { name: 'Auto Peças Bandeirantes', phone: '(11) 3322-4455', address: 'Av. dos Bandeirantes, 2400 — São Paulo, SP' },
+    delivered_at: new Date().toISOString(),
+    store: { name: 'Auto Peças Bandeirantes', phone: '(11) 3322-4455', address: 'Av. dos Bandeirantes, 2400 — São Paulo, SP', city: 'São Paulo', lat: -23.6128, lng: -46.6682 },
     client: { name: 'Beatriz Lima', phone: '(11) 96655-4433' },
     driver: { name: 'Lucas Motta', phone: '(11) 91234-5678' },
-    address: { street: 'Av. Brigadeiro Faria Lima', number: '3144', city: 'São Paulo', state: 'SP' },
+    address: { street: 'Av. Brigadeiro Faria Lima', number: '3144', city: 'São Paulo', state: 'SP', lat: -23.5865, lng: -46.6820 },
     items: [
       { product_name: 'Bateria Automotiva 60Ah Moura Heliar', quantity: 1, product_price: 459.00, subtotal: 459.00 },
     ],
   },
   {
     id: 'ord-106',
+    order_number: '#PED-1038',
     client_id: 'usr-client-05',
     store_id: 'store-hiper-02',
     address_id: 'addr-ext-04',
@@ -546,11 +552,11 @@ export const INITIAL_ORDERS = [
     payment_method: 'pix',
     status: 'delivered',
     created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    delivered_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    store: { name: 'Hiper Peças Centro', phone: '(11) 3105-8890', address: 'Rua Barão de Campinas, 320 — São Paulo, SP' },
+    delivered_at: new Date().toISOString(),
+    store: { name: 'Hiper Peças Centro', phone: '(11) 3105-8890', address: 'Rua Barão de Campinas, 320 — São Paulo, SP', city: 'São Paulo', lat: -23.5382, lng: -46.6461 },
     client: { name: 'Carlos Santos', phone: '(11) 95544-3322' },
     driver: { name: 'Lucas Motta', phone: '(11) 91234-5678' },
-    address: { street: 'Rua Augusta', number: '1500', city: 'São Paulo', state: 'SP' },
+    address: { street: 'Rua Augusta', number: '1500', city: 'São Paulo', state: 'SP', lat: -23.5568, lng: -46.6612 },
     items: [
       { product_name: 'Lâmpada H4 Super Branca Philips Crystal Vision', quantity: 1, product_price: 98.00, subtotal: 98.00 },
     ],
@@ -625,6 +631,7 @@ export const INITIAL_DRIVER_DATA = {
   is_online: true,
   rating: 4.96,
   total_deliveries: 158,
+  balance: 384.50,
   wallet_balance: 384.50,
 };
 
@@ -861,6 +868,7 @@ class MockDatabase {
 
     const newOrder = {
       id: `ord-${Date.now()}`,
+      order_number: `#PED-${Math.floor(1045 + Math.random() * 900)}`,
       client_id: clientId,
       store_id: storeId,
       address_id: addressId,
@@ -873,9 +881,22 @@ class MockDatabase {
       payment_method: paymentMethod || 'credit',
       status: 'pending',
       created_at: new Date().toISOString(),
-      store: { name: store?.name || 'Auto Peças Bandeirantes', phone: store?.phone || '(11) 3322-4455', address: store?.address || '' },
+      store: {
+        name: store?.name || 'Auto Peças Bandeirantes',
+        phone: store?.phone || '(11) 3322-4455',
+        address: store?.address || '',
+        city: store?.city || 'São Paulo',
+        lat: store?.lat || -23.6128,
+        lng: store?.lng || -46.6682,
+      },
       client: { name: client.name, phone: client.phone },
-      address: { street: address?.street || 'Av. Paulista', number: address?.number || '1000', city: address?.city || 'São Paulo' },
+      address: {
+        street: address?.street || 'Av. Paulista',
+        number: address?.number || '1000',
+        city: address?.city || 'São Paulo',
+        lat: address?.lat || -23.5615,
+        lng: address?.lng || -46.6560,
+      },
       items: items.map(i => ({
         product_name: i.name || i.product_name,
         quantity: i.qty || i.quantity || 1,
@@ -925,6 +946,15 @@ class MockDatabase {
   setDriverOnline(driverId, isOnline) {
     this.driver.is_online = isOnline;
     this.saveState();
+  }
+
+  updateDriverData(driverId, updates) {
+    this.driver = { ...this.driver, ...updates };
+    if (updates.balance !== undefined) {
+      this.driver.wallet_balance = updates.balance;
+    }
+    this.saveState();
+    return this.getDriverData(driverId);
   }
 
   // ── Avaliações
